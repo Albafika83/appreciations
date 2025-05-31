@@ -1433,6 +1433,13 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                     </button>
                 </div>
                 <div class="general-appreciation-text">${generalAppreciation}</div>
+                
+                <div class="new-appreciation-section">
+                    <button id="newAppreciationBtn" class="new-appreciation-btn">
+                        <span class="btn-icon">➕</span>
+                        Nouvelle appréciation pour un autre élève
+                    </button>
+                </div>
             </div>
         `;
         
@@ -1441,6 +1448,14 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
         if (copyAppreciationBtn) {
             copyAppreciationBtn.addEventListener('click', () => {
                 this.copyGeneralAppreciation();
+            });
+        }
+        
+        // Ajouter l'event listener pour le bouton nouvelle appréciation
+        const newAppreciationBtn = container.querySelector('#newAppreciationBtn');
+        if (newAppreciationBtn) {
+            newAppreciationBtn.addEventListener('click', () => {
+                this.startNewAppreciation();
             });
         }
         
@@ -1595,6 +1610,48 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                 // Message d'aide pour l'utilisateur
                 alert('Impossible de lire le presse-papiers automatiquement. Veuillez utiliser Ctrl+V dans la zone de texte ou autoriser l\'accès au presse-papiers dans votre navigateur.');
             });
+    }
+
+    startNewAppreciation() {
+        // Masquer la section des résultats
+        const resultsSection = document.getElementById('bulletinResultsSection');
+        if (resultsSection) {
+            resultsSection.style.display = 'none';
+        }
+        
+        // Réafficher la section bulletin
+        const bulletinSection = document.querySelector('.bulletin-section');
+        if (bulletinSection) {
+            bulletinSection.style.display = 'block';
+        }
+        
+        // Vider la zone de texte
+        const bulletinTextArea = document.getElementById('bulletinTextArea');
+        if (bulletinTextArea) {
+            bulletinTextArea.value = '';
+            bulletinTextArea.focus(); // Mettre le focus sur la zone de texte
+        }
+        
+        // Réinitialiser les données
+        this.bulletinData = null;
+        this.currentBulletin = null;
+        this.currentGeneralAppreciation = null;
+        
+        // Réinitialiser le statut
+        const statusElement = document.getElementById('bulletinStatus');
+        if (statusElement) {
+            statusElement.textContent = '';
+            statusElement.className = 'file-status';
+        }
+        
+        // Désactiver le bouton de génération
+        this.enableBulletinButton(false);
+        
+        // Faire défiler vers le haut de la page bulletin
+        const bulletinContent = document.getElementById('bulletinContent');
+        if (bulletinContent) {
+            bulletinContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 }
 

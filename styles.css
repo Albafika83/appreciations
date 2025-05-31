@@ -1313,6 +1313,40 @@ footer {
     border-left: 4px solid #667eea;
 }
 
+.new-appreciation-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+}
+
+.new-appreciation-btn {
+    background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(56, 161, 105, 0.2);
+}
+
+.new-appreciation-btn:hover {
+    background: linear-gradient(135deg, #2f855a 0%, #276749 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(56, 161, 105, 0.3);
+}
+
+.new-appreciation-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(56, 161, 105, 0.2);
+}
+
 .bulletin-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
