@@ -9,13 +9,18 @@ class AppreciationGenerator {
                 "s'investit/participe en classe",
                 "fait des efforts",
                 "très sérieux",
-                "motivé"
+                "motivé",
+                "travail personnel suffisant",
+                "notions acquises"
             ],
             negative: [
                 "ne s'investit/ne participe pas en classe",
                 "ne fait aucun effort",
                 "comportement immature",
-                "comportement inadapté"
+                "manque de concentration",
+                "travail personnel insuffisant",
+                "notions non acquises",
+                "comportement perturbateur"
             ]
         };
         this.initializeEventListeners();
@@ -52,10 +57,16 @@ class AppreciationGenerator {
             btn.classList.remove('active');
         });
 
-        // Afficher la page sélectionnée
+        // Masquer toutes les sections d'aide dans la sidebar
+        document.querySelectorAll('.help-content-section').forEach(section => {
+            section.classList.remove('active');
+        });
+
+        // Afficher la page sélectionnée et la section d'aide correspondante
         if (pageType === 'matiere') {
             const matiereContent = document.getElementById('matiereContent');
             const pageMatiere = document.getElementById('pageMatiere');
+            const helpContentMatiere = document.getElementById('helpContentMatiere');
             
             if (matiereContent) {
                 matiereContent.classList.add('active');
@@ -63,15 +74,22 @@ class AppreciationGenerator {
             if (pageMatiere) {
                 pageMatiere.classList.add('active');
             }
+            if (helpContentMatiere) {
+                helpContentMatiere.classList.add('active');
+            }
         } else if (pageType === 'bulletin') {
             const bulletinContent = document.getElementById('bulletinContent');
             const pageBulletin = document.getElementById('pageBulletin');
+            const helpContentBulletin = document.getElementById('helpContentBulletin');
             
             if (bulletinContent) {
                 bulletinContent.classList.add('active');
             }
             if (pageBulletin) {
                 pageBulletin.classList.add('active');
+            }
+            if (helpContentBulletin) {
+                helpContentBulletin.classList.add('active');
             }
         }
     }
@@ -85,6 +103,33 @@ class AppreciationGenerator {
                     this.handleFileUpload(e, index + 1);
                 });
             }
+        });
+
+        // Gestion des boutons de méthode d'import
+        document.querySelectorAll('.method-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const method = e.currentTarget.dataset.method;
+                const trimester = e.currentTarget.dataset.trimester;
+                this.switchImportMethod(method, trimester);
+            });
+        });
+
+        // Gestion des zones de texte CSV
+        ['csvPaste1', 'csvPaste2', 'csvPaste3'].forEach((id, index) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', () => {
+                    this.handleCsvPasteChange(index + 1);
+                });
+            }
+        });
+
+        // Gestion des boutons de validation des données collées
+        document.querySelectorAll('.validate-paste-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const trimester = parseInt(e.currentTarget.dataset.trimester);
+                this.validatePastedData(trimester);
+            });
         });
 
         // Zone de texte pour le bulletin
@@ -163,6 +208,43 @@ class AppreciationGenerator {
                 this.copyGeneralAppreciation();
             });
         }
+
+        // Boutons pour l'aperçu CSV
+        const validateTypesBtn = document.getElementById('validateTypesBtn');
+        if (validateTypesBtn) {
+            validateTypesBtn.addEventListener('click', () => {
+                this.validateEvaluationTypes();
+            });
+        }
+
+        const backToUploadBtn = document.getElementById('backToUploadBtn');
+        if (backToUploadBtn) {
+            backToUploadBtn.addEventListener('click', () => {
+                this.hideCSVPreview();
+            });
+        }
+
+        // Boutons pour la sidebar d'aide
+        const helpToggleBtn = document.getElementById('helpToggleBtn');
+        if (helpToggleBtn) {
+            helpToggleBtn.addEventListener('click', () => {
+                this.toggleHelpSidebar();
+            });
+        }
+
+        const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+        if (closeSidebarBtn) {
+            closeSidebarBtn.addEventListener('click', () => {
+                this.closeHelpSidebar();
+            });
+        }
+
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', () => {
+                this.closeHelpSidebar();
+            });
+        }
     }
 
     hideApiConfig() {
@@ -173,6 +255,120 @@ class AppreciationGenerator {
         }
     }
 
+    switchImportMethod(method, trimester) {
+        // Réinitialiser l'état pour ce trimestre
+        this.clearTrimesterData(trimester);
+        
+        // Gérer l'affichage des boutons
+        const trimesterCard = document.querySelector(`[data-trimester="${trimester}"]`).closest('.upload-card');
+        const methodBtns = trimesterCard.querySelectorAll('.method-btn');
+        const fileArea = trimesterCard.querySelector(`[data-import="file-${trimester}"]`);
+        const pasteArea = trimesterCard.querySelector(`[data-import="paste-${trimester}"]`);
+
+        // Mettre à jour les boutons actifs
+        methodBtns.forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`[data-method="${method}"][data-trimester="${trimester}"]`).classList.add('active');
+
+        // Afficher la zone appropriée
+        if (method === 'file') {
+            fileArea.classList.add('active');
+            pasteArea.classList.remove('active');
+        } else {
+            fileArea.classList.remove('active');
+            pasteArea.classList.add('active');
+        }
+    }
+
+    clearTrimesterData(trimester) {
+        // Effacer les données du trimestre
+        const studentsToRemove = [];
+        for (const [key, student] of this.studentsData) {
+            const updatedStudent = { ...student };
+            delete updatedStudent[`trimestre${trimester}`];
+            
+            // Si l'élève n'a plus de données pour aucun trimestre, le supprimer
+            if (!updatedStudent.trimestre1 && !updatedStudent.trimestre2 && !updatedStudent.trimestre3) {
+                studentsToRemove.push(key);
+            } else {
+                this.studentsData.set(key, updatedStudent);
+            }
+        }
+        
+        studentsToRemove.forEach(key => this.studentsData.delete(key));
+
+        // Réinitialiser l'interface
+        const statusElement = document.getElementById(`status${trimester}`);
+        if (statusElement) {
+            statusElement.textContent = '';
+            statusElement.className = 'file-status';
+        }
+
+        // Réinitialiser les champs
+        const fileInput = document.getElementById(`trimestre${trimester}`);
+        const pasteArea = document.getElementById(`csvPaste${trimester}`);
+        const validateBtn = document.querySelector(`[data-trimester="${trimester}"].validate-paste-btn`);
+
+        if (fileInput) fileInput.value = '';
+        if (pasteArea) pasteArea.value = '';
+        if (validateBtn) validateBtn.disabled = true;
+
+        this.hideCSVPreview();
+        this.enableAnalyzeButton();
+    }
+
+    handleCsvPasteChange(trimester) {
+        const pasteArea = document.getElementById(`csvPaste${trimester}`);
+        const validateBtn = document.querySelector(`[data-trimester="${trimester}"].validate-paste-btn`);
+        const statusElement = document.getElementById(`status${trimester}`);
+
+        if (!pasteArea || !validateBtn) return;
+
+        const hasContent = pasteArea.value.trim().length > 0;
+        validateBtn.disabled = !hasContent;
+
+        if (hasContent) {
+            statusElement.textContent = '📋 Données collées - Cliquez sur "Valider les données"';
+            statusElement.className = 'file-status';
+        } else {
+            statusElement.textContent = '';
+            statusElement.className = 'file-status';
+        }
+    }
+
+    async validatePastedData(trimester) {
+        const pasteArea = document.getElementById(`csvPaste${trimester}`);
+        const statusElement = document.getElementById(`status${trimester}`);
+        const validateBtn = document.querySelector(`[data-trimester="${trimester}"].validate-paste-btn`);
+
+        if (!pasteArea || !pasteArea.value.trim()) {
+            statusElement.textContent = '❌ Aucune donnée à valider';
+            statusElement.className = 'file-status error';
+            return;
+        }
+
+        try {
+            validateBtn.disabled = true;
+            statusElement.textContent = '⏳ Validation en cours...';
+            statusElement.className = 'file-status';
+
+            const csvText = pasteArea.value.trim();
+            const parseResult = this.parseCSVWithPreview(csvText, trimester);
+            
+            // Afficher l'aperçu CSV pour configuration
+            this.showCSVPreview(parseResult, trimester);
+            
+            statusElement.textContent = `📊 Données validées - ${parseResult.students.length} élèves détectés`;
+            statusElement.className = 'file-status success';
+            
+        } catch (error) {
+            console.error('Erreur lors de la validation des données:', error);
+            statusElement.textContent = `❌ ${error.message}`;
+            statusElement.className = 'file-status error';
+            validateBtn.disabled = false;
+            this.hideCSVPreview();
+        }
+    }
+
     async handleFileUpload(event, trimestre) {
         const file = event.target.files[0];
         const statusElement = document.getElementById(`status${trimestre}`);
@@ -180,36 +376,26 @@ class AppreciationGenerator {
         if (!file) {
             statusElement.textContent = '';
             statusElement.className = 'file-status';
+            this.hideCSVPreview();
             return;
         }
 
         try {
             const csvText = await this.readFile(file);
-            const students = this.parseCSV(csvText, trimestre);
+            const parseResult = this.parseCSVWithPreview(csvText, trimestre);
             
-            // Fusionner avec les données existantes
-            students.forEach(student => {
-                const key = `${student.nom}_${student.prenom}`;
-                if (!this.studentsData.has(key)) {
-                    this.studentsData.set(key, {
-                        nom: student.nom,
-                        prenom: student.prenom,
-                        trimestres: {},
-                        investment: []
-                    });
-                }
-                this.studentsData.get(key).trimestres[trimestre] = student.notes;
-            });
-
-            statusElement.textContent = `✓ ${students.length} élèves importés`;
+            // Afficher l'aperçu CSV pour configuration
+            this.showCSVPreview(parseResult, trimestre);
+            
+            statusElement.textContent = `📊 Fichier chargé - ${parseResult.students.length} élèves détectés`;
             statusElement.className = 'file-status success';
             
         } catch (error) {
-            statusElement.textContent = `✗ Erreur: ${error.message}`;
+            console.error('Erreur lors du traitement du fichier:', error);
+            statusElement.textContent = `❌ ${error.message}`;
             statusElement.className = 'file-status error';
+            this.hideCSVPreview();
         }
-
-        this.enableAnalyzeButton();
     }
 
     enableAnalyzeButton() {
@@ -220,6 +406,447 @@ class AppreciationGenerator {
         if (hasData) {
             button.innerHTML = '<span class="btn-icon">👥</span>Définir l\'investissement des élèves';
         }
+    }
+
+    parseCSVWithPreview(csvText, trimestre) {
+        const lines = csvText.trim().split('\n');
+        
+        if (lines.length < 3) {
+            throw new Error('Format de fichier invalide');
+        }
+
+        // Détecter le format du fichier
+        // Format 1: ligne 0 contient "élèves" (notre nouveau format)
+        // Format 2: ligne 1 contient "élèves" et "Moyenne" (format original)
+        const isPhysiqueChimieFormat = lines[0].includes('élèves') || 
+                                       (lines[1].includes('élèves') && lines[1].includes('Moyenne'));
+        
+        if (isPhysiqueChimieFormat) {
+            return this.parsePhysiqueChimieFormatWithPreview(lines, trimestre);
+        } else {
+            return this.parseStandardFormatWithPreview(lines, trimestre);
+        }
+    }
+
+    parsePhysiqueChimieFormatWithPreview(lines, trimestre) {
+        const students = [];
+        
+        // Pour ce format spécifique :
+        // Ligne 0: "19 élèves" + en-têtes
+        // Ligne 1: coefficients
+        // Ligne 2+: données élèves
+        const headerLineIndex = 0;
+        const coeffLineIndex = 1;
+        const dataStartIndex = 2;
+        
+        const headerLine = lines[headerLineIndex];
+        const headerParts = this.detectAndParseCSVLine(headerLine);
+        const coeffLine = lines[coeffLineIndex];
+        const coeffParts = this.detectAndParseCSVLine(coeffLine);
+        
+
+        
+        // Extraire les colonnes de notes (en ignorant la colonne "Moyenne")
+        const columns = [];
+        
+        // Commencer à partir de l'index 3 pour ignorer: nom(0), classe(1), moyenne(2)
+        for (let i = 3; i < headerParts.length; i++) {
+            const header = headerParts[i] ? headerParts[i].trim() : '';
+            const coeff = coeffParts[i] ? coeffParts[i].trim() : '';
+            let coeffValue = 1;
+            
+            // Parser le coefficient
+            if (coeff && !isNaN(parseInt(coeff))) {
+                coeffValue = parseInt(coeff);
+            } else if (coeff.includes('/')) {
+                const match = coeff.match(/(\d+)/);
+                if (match) {
+                    coeffValue = parseInt(match[1]);
+                }
+            }
+            
+            columns.push({
+                index: i,
+                title: header || `Colonne ${i - 2}`, // -2 car on ignore nom et classe
+                coeff: coeffValue,
+                evaluationType: this.getDefaultEvaluationType(coeffValue)
+            });
+        }
+
+        // Parser les données des élèves pour l'aperçu
+        const previewData = [];
+        for (let i = dataStartIndex; i < Math.min(lines.length, dataStartIndex + 5); i++) { // Limiter à 5 élèves pour l'aperçu
+            const line = lines[i].trim();
+            if (!line || line.includes('Moy. de la classe') || line.includes('moyennes') || 
+                line.match(/^\s*\d+[,\.]\d+/)) continue; // Ignorer les lignes de moyennes
+
+            try {
+                const parts = this.detectAndParseCSVLine(line);
+                if (parts.length < 3) continue;
+
+                const fullName = parts[0].replace(/"/g, '').trim();
+                if (!fullName) continue;
+
+                let nom, prenom;
+                const nameParts = fullName.split(' ');
+                if (nameParts.length >= 2) {
+                    // Format "NOM Prénom" ou "PRÉNOM Nom"
+                    // On assume que le premier mot en majuscules est le nom de famille
+                    if (nameParts[0] === nameParts[0].toUpperCase() && nameParts[0] !== nameParts[0].toLowerCase()) {
+                        nom = nameParts[0];
+                        prenom = nameParts.slice(1).join(' ');
+                    } else {
+                        // Si pas de distinction claire, prendre le dernier comme nom
+                        nom = nameParts[nameParts.length - 1];
+                        prenom = nameParts.slice(0, -1).join(' ');
+                    }
+                } else {
+                    nom = fullName;
+                    prenom = fullName;
+                }
+
+                const rowData = [prenom + ' ' + nom, parts[1] || '', parts[2] || '']; // Nom, Classe, Moyenne
+                for (let j = 3; j < parts.length && j - 3 < columns.length; j++) {
+                    const notePart = parts[j].replace(/"/g, '').trim();
+                    rowData.push(notePart || '-');
+                }
+                
+                previewData.push(rowData);
+            } catch (error) {
+                console.warn(`Erreur ligne ${i + 1}: ${error.message}`);
+            }
+        }
+
+        // Parser tous les élèves pour les données finales
+        for (let i = dataStartIndex; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line || line.includes('Moy. de la classe') || line.includes('moyennes') || 
+                line.match(/^\s*\d+[,\.]\d+/)) continue; // Ignorer les lignes de moyennes
+
+            try {
+                const parts = this.detectAndParseCSVLine(line);
+                
+                if (parts.length < 3) continue;
+
+                const fullName = parts[0].replace(/"/g, '').trim();
+                if (!fullName) continue;
+
+                let nom, prenom;
+                const nameParts = fullName.split(' ');
+                if (nameParts.length >= 2) {
+                    // Format "NOM Prénom" ou "PRÉNOM Nom"
+                    // On assume que le premier mot en majuscules est le nom de famille
+                    if (nameParts[0] === nameParts[0].toUpperCase() && nameParts[0] !== nameParts[0].toLowerCase()) {
+                        nom = nameParts[0];
+                        prenom = nameParts.slice(1).join(' ');
+                    } else {
+                        // Si pas de distinction claire, prendre le dernier comme nom
+                        nom = nameParts[nameParts.length - 1];
+                        prenom = nameParts.slice(0, -1).join(' ');
+                    }
+                } else {
+                    nom = fullName;
+                    prenom = fullName;
+                }
+
+                const notes = [];
+                // Commencer à la colonne après "Moyenne" (index 3)
+                for (let j = 3; j < parts.length && j - 3 < columns.length; j++) {
+                    const notePart = parts[j].replace(/"/g, '').trim();
+                    if (!notePart || notePart === 'Abs' || notePart === '' || notePart === 'N.Rdu' || notePart === '-') {
+                        continue;
+                    }
+
+                    const noteStr = notePart.replace(',', '.');
+                    const note = parseFloat(noteStr);
+                    const columnIndex = j - 3;
+
+                    if (!isNaN(note) && note >= 0 && note <= 20 && columnIndex < columns.length) {
+                        notes.push({ 
+                            note, 
+                            coeff: columns[columnIndex].coeff,
+                            evaluationType: columns[columnIndex].evaluationType
+                        });
+                    }
+                }
+
+                if (nom && prenom && notes.length > 0) {
+                    students.push({ nom, prenom, notes });
+                }
+            } catch (error) {
+                console.warn(`Erreur ligne ${i + 1}: ${error.message}`);
+            }
+        }
+
+        if (students.length === 0) {
+            throw new Error('Aucun élève valide trouvé dans le fichier');
+        }
+
+        return {
+            students,
+            columns,
+            previewData,
+            format: 'physique-chimie'
+        };
+    }
+
+    parseStandardFormatWithPreview(lines, trimestre) {
+        const students = [];
+        const columns = [];
+        const previewData = [];
+
+        // Analyser la première ligne pour détecter les colonnes
+        if (lines.length > 0) {
+            const firstLine = this.parseCSVLine(lines[0]);
+            for (let i = 2; i < firstLine.length; i++) {
+                const notePart = firstLine[i].trim();
+                const match = notePart.match(/^(\d+(?:\.\d+)?)\((\d+)\)$/);
+                
+                if (match) {
+                    const coeff = parseInt(match[2]);
+                    columns.push({
+                        index: i,
+                        title: `Colonne ${i - 1}`,
+                        coeff: coeff,
+                        evaluationType: this.getDefaultEvaluationType(coeff)
+                    });
+                }
+            }
+        }
+
+        // Aperçu des données
+        for (let i = 0; i < Math.min(lines.length, 5); i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            try {
+                const parts = this.parseCSVLine(line);
+                if (parts.length < 3) continue;
+
+                const nom = parts[0].trim();
+                const prenom = parts[1].trim();
+                const rowData = [prenom + ' ' + nom];
+
+                for (let j = 2; j < parts.length; j++) {
+                    const notePart = parts[j].trim();
+                    rowData.push(notePart || '-');
+                }
+                
+                previewData.push(rowData);
+            } catch (error) {
+                console.warn(`Erreur ligne ${i + 1}: ${error.message}`);
+            }
+        }
+
+        // Parser tous les élèves
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            try {
+                const parts = this.parseCSVLine(line);
+                if (parts.length < 3) continue;
+
+                const nom = parts[0].trim();
+                const prenom = parts[1].trim();
+                const notes = [];
+
+                for (let j = 2; j < parts.length; j++) {
+                    const notePart = parts[j].trim();
+                    if (!notePart) continue;
+
+                    const match = notePart.match(/^(\d+(?:\.\d+)?)\((\d+)\)$/);
+                    if (match) {
+                        const note = parseFloat(match[1]);
+                        const coeff = parseInt(match[2]);
+                        const columnIndex = j - 2;
+                        
+                        if (!isNaN(note) && !isNaN(coeff) && note >= 0 && note <= 20 && columnIndex < columns.length) {
+                            notes.push({ 
+                                note, 
+                                coeff,
+                                evaluationType: columns[columnIndex].evaluationType
+                            });
+                        }
+                    }
+                }
+
+                if (nom && prenom && notes.length > 0) {
+                    students.push({ nom, prenom, notes });
+                }
+            } catch (error) {
+                console.warn(`Erreur ligne ${i + 1}: ${error.message}`);
+            }
+        }
+
+        if (students.length === 0) {
+            throw new Error('Aucun élève valide trouvé dans le fichier');
+        }
+
+        return {
+            students,
+            columns,
+            previewData,
+            format: 'standard'
+        };
+    }
+
+    getDefaultEvaluationType(coeff) {
+        // Déterminer le type d'évaluation basé sur le coefficient
+        if (coeff >= 3) {
+            return 'devoir';
+        } else if (coeff === 2) {
+            return 'interrogation';
+        } else {
+            return 'tp';
+        }
+    }
+
+    showCSVPreview(parseResult, trimestre) {
+        const csvPreviewSection = document.getElementById('csvPreviewSection');
+        const csvPreviewContent = document.getElementById('csvPreviewContent');
+        
+        if (!csvPreviewSection || !csvPreviewContent) return;
+
+        // Masquer les autres sections
+        const uploadSection = document.querySelector('.upload-section');
+        const analysisSection = document.querySelector('.analysis-section');
+        
+        if (uploadSection) uploadSection.style.display = 'none';
+        if (analysisSection) analysisSection.style.display = 'none';
+
+        // Stocker les données pour validation ultérieure
+        this.currentParseResult = parseResult;
+        this.currentTrimestre = trimestre;
+
+        // Créer le tableau d'aperçu
+        let tableHTML = '<table class="csv-preview-table">';
+        
+        // En-tête avec les noms d'élèves
+        tableHTML += '<thead><tr><th>Élève</th><th>Classe</th><th>Moyenne</th>';
+        parseResult.columns.forEach(col => {
+            tableHTML += `<th>
+                <div class="column-info">
+                    <span class="column-title">${col.title}</span>
+                    <span class="column-coeff">Coeff: ${col.coeff}</span>
+                </div>
+            </th>`;
+        });
+        tableHTML += '</tr></thead>';
+
+        // Ligne de configuration des types
+        tableHTML += '<tbody><tr class="column-config-header"><td><strong>Type d\'évaluation:</strong></td><td colspan="2">-</td>';
+        parseResult.columns.forEach((col, index) => {
+            tableHTML += `<td>
+                <select class="evaluation-type-select" data-column-index="${index}">
+                    <option value="auto" ${col.evaluationType === 'auto' ? 'selected' : ''}>Auto (par coeff)</option>
+                    <option value="devoir" ${col.evaluationType === 'devoir' ? 'selected' : ''}>Devoir sur table</option>
+                    <option value="interrogation" ${col.evaluationType === 'interrogation' ? 'selected' : ''}>Interrogation</option>
+                    <option value="tp" ${col.evaluationType === 'tp' ? 'selected' : ''}>TP/Exercices</option>
+                </select>
+            </td>`;
+        });
+        tableHTML += '</tr>';
+
+        // Données d'aperçu
+        parseResult.previewData.forEach(row => {
+            tableHTML += '<tr>';
+            row.forEach(cell => {
+                tableHTML += `<td>${cell}</td>`;
+            });
+            tableHTML += '</tr>';
+        });
+
+        if (parseResult.previewData.length >= 5) {
+            tableHTML += '<tr><td colspan="' + (parseResult.columns.length + 3) + '" style="text-align: center; font-style: italic; color: #718096;">... et ' + (parseResult.students.length - 5) + ' autres élèves</td></tr>';
+        }
+
+        tableHTML += '</tbody></table>';
+
+        csvPreviewContent.innerHTML = tableHTML;
+        csvPreviewSection.style.display = 'block';
+
+        // Scroll vers l'aperçu
+        csvPreviewSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    hideCSVPreview() {
+        const csvPreviewSection = document.getElementById('csvPreviewSection');
+        if (csvPreviewSection) {
+            csvPreviewSection.style.display = 'none';
+        }
+
+        // Réafficher les sections principales
+        const uploadSection = document.querySelector('.upload-section');
+        const analysisSection = document.querySelector('.analysis-section');
+        
+        if (uploadSection) uploadSection.style.display = 'block';
+        if (analysisSection) analysisSection.style.display = 'block';
+
+        // Nettoyer les données temporaires
+        this.currentParseResult = null;
+        this.currentTrimestre = null;
+    }
+
+    validateEvaluationTypes() {
+        if (!this.currentParseResult || !this.currentTrimestre) {
+            console.error('Aucune donnée à valider');
+            return;
+        }
+
+        // Récupérer les types d'évaluation sélectionnés
+        const selects = document.querySelectorAll('.evaluation-type-select');
+        selects.forEach(select => {
+            const columnIndex = parseInt(select.dataset.columnIndex);
+            const selectedType = select.value;
+            
+            if (columnIndex < this.currentParseResult.columns.length) {
+                if (selectedType === 'auto') {
+                    // Utiliser le type par défaut basé sur le coefficient
+                    this.currentParseResult.columns[columnIndex].evaluationType = 
+                        this.getDefaultEvaluationType(this.currentParseResult.columns[columnIndex].coeff);
+                } else {
+                    this.currentParseResult.columns[columnIndex].evaluationType = selectedType;
+                }
+            }
+        });
+
+        // Mettre à jour les notes des étudiants avec les nouveaux types
+        this.currentParseResult.students.forEach(student => {
+            student.notes.forEach((note, noteIndex) => {
+                if (noteIndex < this.currentParseResult.columns.length) {
+                    note.evaluationType = this.currentParseResult.columns[noteIndex].evaluationType;
+                }
+            });
+        });
+
+        // Intégrer les données dans studentsData
+        this.integrateStudentData(this.currentParseResult.students, this.currentTrimestre);
+
+        // Masquer l'aperçu et réactiver le bouton d'analyse
+        this.hideCSVPreview();
+        this.enableAnalyzeButton();
+        
+        // Afficher un message de confirmation
+        const statusElement = document.getElementById(`status${this.currentTrimestre}`);
+        if (statusElement) {
+            statusElement.textContent = `✅ ${this.currentParseResult.students.length} élèves importés avec types d'évaluation configurés`;
+            statusElement.className = 'file-status success';
+        }
+    }
+
+    integrateStudentData(students, trimestre) {
+        students.forEach(student => {
+            const key = `${student.nom}_${student.prenom}`;
+            if (!this.studentsData.has(key)) {
+                this.studentsData.set(key, {
+                    nom: student.nom,
+                    prenom: student.prenom,
+                    investment: []
+                });
+            }
+            this.studentsData.get(key)[`trimestre${trimestre}`] = student.notes;
+        });
     }
 
     showInvestmentSelection() {
@@ -324,11 +951,17 @@ class AppreciationGenerator {
     }
 
     getStudentAverage(studentData) {
-        const trimestres = Object.keys(studentData.trimestres);
+        // Chercher les trimestres disponibles
+        const trimestres = [];
+        if (studentData.trimestre1) trimestres.push('trimestre1');
+        if (studentData.trimestre2) trimestres.push('trimestre2');
+        if (studentData.trimestre3) trimestres.push('trimestre3');
+        
         if (trimestres.length === 0) return 'N/A';
         
-        const dernierTrimestre = trimestres.sort().pop();
-        const notes = studentData.trimestres[dernierTrimestre];
+        // Prendre le dernier trimestre disponible
+        const dernierTrimestre = trimestres[trimestres.length - 1];
+        const notes = studentData[dernierTrimestre];
         const moyenne = this.calculateWeightedAverage(notes);
         
         return moyenne ? moyenne.toFixed(1) : 'N/A';
@@ -508,7 +1141,7 @@ class AppreciationGenerator {
             
             if (char === '"') {
                 inQuotes = !inQuotes;
-            } else if ((char === ',' || char === ';') && !inQuotes) {
+            } else if ((char === ',' || char === ';' || char === '\t') && !inQuotes) {
                 result.push(current);
                 current = '';
             } else {
@@ -518,6 +1151,42 @@ class AppreciationGenerator {
         
         result.push(current);
         return result;
+    }
+
+    parseTabSeparatedLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === '\t' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        result.push(current);
+        return result;
+    }
+
+    detectAndParseCSVLine(line) {
+        // Détecter le type de séparateur en comptant les occurrences
+        const tabCount = (line.match(/\t/g) || []).length;
+        const commaCount = (line.match(/,/g) || []).length;
+        const semicolonCount = (line.match(/;/g) || []).length;
+        
+        // Si on a des tabulations et que les virgules sont probablement des décimales
+        if (tabCount > 0 && (tabCount >= commaCount || commaCount < tabCount * 2)) {
+            return this.parseTabSeparatedLine(line);
+        } else {
+            return this.parseCSVLine(line);
+        }
     }
 
     async generateAppreciations() {
@@ -687,18 +1356,39 @@ class AppreciationGenerator {
             pointsFaibles: []
         };
 
-        // Analyser chaque trimestre
-        Object.keys(studentData.trimestres).forEach(trimestre => {
-            const notes = studentData.trimestres[trimestre];
-            const devoirsSurTable = notes.filter(n => n.coeff > 1);
+        // Analyser chaque trimestre disponible
+        const trimestresDisponibles = [];
+        if (studentData.trimestre1) trimestresDisponibles.push('trimestre1');
+        if (studentData.trimestre2) trimestresDisponibles.push('trimestre2');
+        if (studentData.trimestre3) trimestresDisponibles.push('trimestre3');
+
+        trimestresDisponibles.forEach(trimestre => {
+            const notes = studentData[trimestre];
+            
+            // Filtrer par type d'évaluation
+            const devoirsSurTable = notes.filter(n => 
+                n.evaluationType === 'devoir' || (!n.evaluationType && n.coeff > 1)
+            );
+            const interrogations = notes.filter(n => 
+                n.evaluationType === 'interrogation' || (!n.evaluationType && n.coeff === 2)
+            );
+            const tpExercices = notes.filter(n => 
+                n.evaluationType === 'tp' || (!n.evaluationType && n.coeff === 1)
+            );
 
             const moyenneDevoirs = this.calculateWeightedAverage(devoirsSurTable);
+            const moyenneInterrogations = this.calculateWeightedAverage(interrogations);
+            const moyenneTP = this.calculateWeightedAverage(tpExercices);
             const moyenneGenerale = this.calculateWeightedAverage(notes);
 
             analysis.trimestres[trimestre] = {
                 moyenneDevoirs,
+                moyenneInterrogations,
+                moyenneTP,
                 moyenneGenerale,
-                nbDevoirs: devoirsSurTable.length
+                nbDevoirs: devoirsSurTable.length,
+                nbInterrogations: interrogations.length,
+                nbTP: tpExercices.length
             };
         });
 
@@ -708,11 +1398,16 @@ class AppreciationGenerator {
             const premier = analysis.trimestres[trimestresOrdonnes[0]];
             const dernier = analysis.trimestres[trimestresOrdonnes[trimestresOrdonnes.length - 1]];
             
+            const evolutionDevoirs = dernier.moyenneDevoirs - premier.moyenneDevoirs;
             const evolutionGenerale = dernier.moyenneGenerale - premier.moyenneGenerale;
 
-            if (evolutionGenerale > 1) {
+            // Priorité à l'évolution des devoirs sur table
+            const evolutionPrincipale = dernier.moyenneDevoirs && premier.moyenneDevoirs ? 
+                evolutionDevoirs : evolutionGenerale;
+
+            if (evolutionPrincipale > 1) {
                 analysis.evolution = 'progression';
-            } else if (evolutionGenerale < -1) {
+            } else if (evolutionPrincipale < -1) {
                 analysis.evolution = 'régression';
             } else {
                 analysis.evolution = 'stable';
@@ -723,13 +1418,21 @@ class AppreciationGenerator {
         const dernierTrimestre = analysis.trimestres[trimestresOrdonnes[trimestresOrdonnes.length - 1]];
         if (dernierTrimestre) {
             if (dernierTrimestre.moyenneDevoirs >= 14) {
-                analysis.pointsForts.push('excellents résultats aux évaluations');
+                analysis.pointsForts.push('excellents résultats aux devoirs sur table');
             } else if (dernierTrimestre.moyenneDevoirs >= 12) {
-                analysis.pointsForts.push('bons résultats aux évaluations');
+                analysis.pointsForts.push('bons résultats aux devoirs sur table');
+            }
+
+            if (dernierTrimestre.moyenneInterrogations >= 14) {
+                analysis.pointsForts.push('très bonnes interrogations');
             }
 
             if (dernierTrimestre.moyenneDevoirs < 10) {
-                analysis.pointsFaibles.push('difficultés aux évaluations');
+                analysis.pointsFaibles.push('difficultés aux devoirs sur table');
+            }
+            
+            if (dernierTrimestre.moyenneInterrogations < 10 && dernierTrimestre.nbInterrogations > 0) {
+                analysis.pointsFaibles.push('difficultés aux interrogations');
             }
         }
 
@@ -788,6 +1491,21 @@ class AppreciationGenerator {
             // Nettoyer les espaces multiples
             appreciation = appreciation.replace(/\s+/g, ' ').trim();
             
+            // Vérifier la longueur mais privilégier les phrases complètes
+            if (appreciation.length > 200) {
+                // D'abord essayer de trouver le dernier point avant 200 caractères
+                const lastPeriod = appreciation.substring(0, 200).lastIndexOf('.');
+                if (lastPeriod > 150) {
+                    // Si on trouve un point après 150 caractères, couper là
+                    appreciation = appreciation.substring(0, lastPeriod + 1);
+                } else {
+                    // Sinon, tronquer au dernier mot complet
+                    const truncated = appreciation.substring(0, 197);
+                    const lastSpace = truncated.lastIndexOf(' ');
+                    appreciation = truncated.substring(0, lastSpace) + '...';
+                }
+            }
+            
             return appreciation;
             
         } catch (error) {
@@ -799,14 +1517,19 @@ class AppreciationGenerator {
     buildPrompt(studentData, analysis) {
         const trimestres = Object.keys(analysis.trimestres).sort();
         const dernierTrimestre = analysis.trimestres[trimestres[trimestres.length - 1]];
-        const numeroTrimestre = Math.max(...trimestres.map(t => parseInt(t)));
+        const numeroTrimestre = Math.max(...trimestres.map(t => parseInt(t.replace('trimestre', ''))));
         
         let prompt = `Tu es un professeur expérimenté. Rédige une appréciation scolaire concise et complète pour ${studentData.prenom} ${studentData.nom}.\n\n`;
         
         prompt += `Données académiques:\n`;
         trimestres.forEach(t => {
             const data = analysis.trimestres[t];
-            prompt += `- Trimestre ${t}: Moyenne devoirs ${data.moyenneDevoirs?.toFixed(1) || 'N/A'}/20\n`;
+            const trimNumber = t.replace('trimestre', '');
+            prompt += `- Trimestre ${trimNumber}: Moyenne devoirs sur table ${data.moyenneDevoirs?.toFixed(1) || 'N/A'}/20`;
+            if (data.moyenneInterrogations !== null && data.nbInterrogations > 0) {
+                prompt += `, interrogations ${data.moyenneInterrogations?.toFixed(1)}/20`;
+            }
+            prompt += `\n`;
         });
         
         if (analysis.evolution) {
@@ -827,23 +1550,31 @@ class AppreciationGenerator {
             conseilsSpecifiques = `
 - C'est le trimestre 3 (fin d'année), ne demande PAS de progresser ou de continuer les efforts
 - Fais un bilan de l'année scolaire
-- Pour les bons résultats : félicite et encourage pour la suite
-- Pour les difficultés : mentionne les acquis et donne des perspectives positives`;
+- Pour les bons résultats : félicite et encourage pour la suite`;
         } else {
             conseilsSpecifiques = `
 - C'est le trimestre ${numeroTrimestre}, tu peux encourager la progression et donner des conseils pour la suite
 - Donne des conseils constructifs pour améliorer les résultats`;
         }
         
+        // Calculer l'écart entre moyenne devoirs et moyenne générale
+        const ecartDevoirs = Math.abs(dernierTrimestre.moyenneDevoirs - dernierTrimestre.moyenneGenerale);
+        const mentionnerNoteDevoirs = ecartDevoirs > 3;
+
         prompt += `\nRédige une appréciation professionnelle qui :
 - Mentionne les résultats aux devoirs sur table en priorité
+${mentionnerNoteDevoirs ? 
+    `- INDIQUE la note chiffrée aux devoirs sur table car écart significatif avec la moyenne générale` : 
+    `- NE MENTIONNE PAS la note chiffrée aux devoirs, parle seulement de "bons/très bons/excellents résultats" ou "difficultés"`}
 - Intègre le comportement/investissement si pertinent${conseilsSpecifiques}
-- Reste concise (environ 150-200 caractères)
+- Reste très concise (STRICTEMENT moins de 200 caractères)
+- IMPÉRATIF : L'appréciation DOIT être complète et se terminer par un point
 - Ne mentionne jamais les TP
 - Utilise un ton professionnel et bienveillant
+- Fais des phrases courtes et va directement à l'essentiel
 Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
 
-Écris directement l'appréciation sans introduction ni explication.`;
+Écris directement l'appréciation complète sans introduction ni explication.`;
         
         return prompt;
     }
@@ -851,7 +1582,7 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
     generateFallbackAppreciation(studentData, analysis) {
         const trimestres = Object.keys(analysis.trimestres).sort();
         const dernierTrimestre = analysis.trimestres[trimestres[trimestres.length - 1]];
-        const numeroTrimestre = Math.max(...trimestres.map(t => parseInt(t)));
+        const numeroTrimestre = Math.max(...trimestres.map(t => parseInt(t.replace('trimestre', ''))));
         
         if (!dernierTrimestre) {
             return "Données insuffisantes pour générer une appréciation.";
@@ -859,18 +1590,39 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
 
         let appreciation = "";
         const moyenneDevoirs = dernierTrimestre.moyenneDevoirs;
+        const moyenneGenerale = dernierTrimestre.moyenneGenerale;
+        
+        // Calculer l'écart entre moyenne devoirs et moyenne générale
+        const ecartDevoirs = Math.abs(moyenneDevoirs - moyenneGenerale);
+        const mentionnerNoteDevoirs = ecartDevoirs > 3;
 
-        // Résultats académiques
-        if (moyenneDevoirs >= 16) {
-            appreciation = "Excellents résultats aux évaluations";
-        } else if (moyenneDevoirs >= 14) {
-            appreciation = "Très bons résultats aux évaluations";
-        } else if (moyenneDevoirs >= 12) {
-            appreciation = "Bons résultats aux évaluations";
-        } else if (moyenneDevoirs >= 10) {
-            appreciation = "Résultats satisfaisants aux évaluations";
+        // Résultats académiques (avec ou sans note selon l'écart)
+        if (mentionnerNoteDevoirs) {
+            // Mention de la note si écart significatif
+            if (moyenneDevoirs >= 16) {
+                appreciation = `Excellents résultats aux devoirs (${moyenneDevoirs.toFixed(1)}/20)`;
+            } else if (moyenneDevoirs >= 14) {
+                appreciation = `Très bons résultats aux devoirs (${moyenneDevoirs.toFixed(1)}/20)`;
+            } else if (moyenneDevoirs >= 12) {
+                appreciation = `Bons résultats aux devoirs (${moyenneDevoirs.toFixed(1)}/20)`;
+            } else if (moyenneDevoirs >= 10) {
+                appreciation = `Résultats satisfaisants aux devoirs (${moyenneDevoirs.toFixed(1)}/20)`;
+            } else {
+                appreciation = `Difficultés aux devoirs (${moyenneDevoirs.toFixed(1)}/20)`;
+            }
         } else {
-            appreciation = "Difficultés aux évaluations";
+            // Pas de mention de note si écart faible
+            if (moyenneDevoirs >= 16) {
+                appreciation = "Excellents résultats";
+            } else if (moyenneDevoirs >= 14) {
+                appreciation = "Très bons résultats";
+            } else if (moyenneDevoirs >= 12) {
+                appreciation = "Bons résultats";
+            } else if (moyenneDevoirs >= 10) {
+                appreciation = "Résultats satisfaisants";
+            } else {
+                appreciation = "Difficultés importantes";
+            }
         }
 
         // Comportement (concis)
@@ -884,53 +1636,84 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
 
             if (positiveInvestment.length > 0) {
                 if (positiveInvestment[0].includes("s'investit")) {
-                    appreciation += ", bon investissement";
+                    appreciation += ", investi";
                 } else if (positiveInvestment[0].includes("efforts")) {
                     appreciation += ", fait des efforts";
                 } else if (positiveInvestment[0].includes("sérieux")) {
-                    appreciation += ", très sérieux";
+                    appreciation += ", sérieux";
                 } else if (positiveInvestment[0].includes("motivé")) {
                     appreciation += ", motivé";
+                } else if (positiveInvestment[0].includes("travail personnel suffisant")) {
+                    appreciation += ", bon travail personnel";
+                } else if (positiveInvestment[0].includes("notions acquises")) {
+                    appreciation += ", notions acquises";
                 }
             }
             if (negativeInvestment.length > 0) {
                 if (negativeInvestment[0].includes("ne s'investit")) {
-                    appreciation += ", manque d'investissement";
+                    appreciation += ", peu investi";
                 } else if (negativeInvestment[0].includes("aucun effort")) {
                     appreciation += ", aucun effort";
                 } else if (negativeInvestment[0].includes("immature")) {
-                    appreciation += ", comportement immature";
-                } else if (negativeInvestment[0].includes("inadapté")) {
-                    appreciation += ", comportement inadapté";
+                    appreciation += ", immature";
+                } else if (negativeInvestment[0].includes("concentration")) {
+                    appreciation += ", manque de concentration";
+                } else if (negativeInvestment[0].includes("travail personnel insuffisant")) {
+                    appreciation += ", travail insuffisant";
+                } else if (negativeInvestment[0].includes("notions non acquises")) {
+                    appreciation += ", lacunes importantes";
+                } else if (negativeInvestment[0].includes("comportement perturbateur")) {
+                    appreciation += ", perturbateur";
                 }
             }
         }
 
-        // Évolution et conseil adaptés au trimestre
+        // Évolution et conseil adaptés au trimestre (version courte)
         if (numeroTrimestre === 3) {
             // Trimestre 3 : bilan de fin d'année
             if (analysis.evolution === 'progression') {
-                appreciation += ". Belle progression cette année.";
+                appreciation += ". Belle progression.";
             } else if (analysis.evolution === 'régression') {
-                appreciation += ". Année difficile mais des acquis à valoriser.";
+                appreciation += ". Année difficile.";
             } else {
                 if (moyenneDevoirs >= 12) {
-                    appreciation += ". Année réussie, félicitations.";
+                    appreciation += ". Année réussie.";
                 } else {
-                    appreciation += ". Année avec des difficultés mais du potentiel.";
+                    appreciation += ". Du potentiel à développer.";
                 }
             }
         } else {
             // Trimestres 1 et 2 : conseils pour progresser
             if (analysis.evolution === 'progression') {
-                appreciation += ". Progression encourageante, continuez ainsi.";
+                appreciation += ". Bonne progression.";
             } else if (analysis.evolution === 'régression') {
-                appreciation += ". Baisse de niveau, des efforts sont nécessaires.";
+                appreciation += ". Plus d'efforts nécessaires.";
             } else {
                 if (moyenneDevoirs >= 12) {
-                    appreciation += ". Continuez vos efforts.";
+                    appreciation += ". Continuez.";
                 } else {
-                    appreciation += ". Plus de travail nécessaire.";
+                    appreciation += ". Peut mieux faire.";
+                }
+            }
+        }
+
+        // S'assurer que l'appréciation reste sous 200 caractères avec phrases complètes
+        if (appreciation.length > 200) {
+            // Essayer de couper au dernier point avant 200 caractères
+            const lastPeriod = appreciation.substring(0, 200).lastIndexOf('.');
+            if (lastPeriod > 120) {
+                appreciation = appreciation.substring(0, lastPeriod + 1);
+            } else {
+                // Forcer une phrase courte
+                const moyenneDevoirs = dernierTrimestre.moyenneDevoirs;
+                if (moyenneDevoirs >= 14) {
+                    appreciation = "Très bons résultats. Continuez ainsi.";
+                } else if (moyenneDevoirs >= 12) {
+                    appreciation = "Bons résultats. Poursuivez vos efforts.";
+                } else if (moyenneDevoirs >= 10) {
+                    appreciation = "Résultats satisfaisants. Plus de travail nécessaire.";
+                } else {
+                    appreciation = "Difficultés importantes. Efforts nécessaires.";
                 }
             }
         }
@@ -965,7 +1748,15 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                 <strong>Résumé:</strong> 
                 ${trimestres.map(t => {
                     const data = analysis.trimestres[t];
-                    return `T${t}: Devoirs ${data.moyenneDevoirs?.toFixed(1) || 'N/A'}/20`;
+                    const trimNumber = t.replace('trimestre', '');
+                    let summary = `T${trimNumber}: DS ${data.moyenneDevoirs?.toFixed(1) || 'N/A'}/20`;
+                    if (data.moyenneInterrogations !== null && data.nbInterrogations > 0) {
+                        summary += `, IT ${data.moyenneInterrogations?.toFixed(1)}/20`;
+                    }
+                    if (data.moyenneTP !== null && data.nbTP > 0) {
+                        summary += `, TP ${data.moyenneTP?.toFixed(1)}/20`;
+                    }
+                    return summary;
                 }).join(' | ')}
                 ${analysis.evolution ? ` | Évolution: ${analysis.evolution}` : ''}
                 <br><strong>Investissement:</strong> ${investmentText}
@@ -1433,13 +2224,6 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                     </button>
                 </div>
                 <div class="general-appreciation-text">${generalAppreciation}</div>
-                
-                <div class="new-appreciation-section">
-                    <button id="newAppreciationBtn" class="new-appreciation-btn">
-                        <span class="btn-icon">➕</span>
-                        Nouvelle appréciation pour un autre élève
-                    </button>
-                </div>
             </div>
         `;
         
@@ -1448,14 +2232,6 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
         if (copyAppreciationBtn) {
             copyAppreciationBtn.addEventListener('click', () => {
                 this.copyGeneralAppreciation();
-            });
-        }
-        
-        // Ajouter l'event listener pour le bouton nouvelle appréciation
-        const newAppreciationBtn = container.querySelector('#newAppreciationBtn');
-        if (newAppreciationBtn) {
-            newAppreciationBtn.addEventListener('click', () => {
-                this.startNewAppreciation();
             });
         }
         
@@ -1612,45 +2388,44 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
             });
     }
 
-    startNewAppreciation() {
-        // Masquer la section des résultats
-        const resultsSection = document.getElementById('bulletinResultsSection');
-        if (resultsSection) {
-            resultsSection.style.display = 'none';
+    toggleHelpSidebar() {
+        const sidebar = document.getElementById('helpSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        if (sidebar && overlay) {
+            const isOpen = sidebar.classList.contains('open');
+            
+            if (isOpen) {
+                this.closeHelpSidebar();
+            } else {
+                this.openHelpSidebar();
+            }
         }
+    }
+
+    openHelpSidebar() {
+        const sidebar = document.getElementById('helpSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
         
-        // Réafficher la section bulletin
-        const bulletinSection = document.querySelector('.bulletin-section');
-        if (bulletinSection) {
-            bulletinSection.style.display = 'block';
+        if (sidebar && overlay) {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+            
+            // Empêcher le scroll du body quand la sidebar est ouverte
+            document.body.style.overflow = 'hidden';
         }
+    }
+
+    closeHelpSidebar() {
+        const sidebar = document.getElementById('helpSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
         
-        // Vider la zone de texte
-        const bulletinTextArea = document.getElementById('bulletinTextArea');
-        if (bulletinTextArea) {
-            bulletinTextArea.value = '';
-            bulletinTextArea.focus(); // Mettre le focus sur la zone de texte
-        }
-        
-        // Réinitialiser les données
-        this.bulletinData = null;
-        this.currentBulletin = null;
-        this.currentGeneralAppreciation = null;
-        
-        // Réinitialiser le statut
-        const statusElement = document.getElementById('bulletinStatus');
-        if (statusElement) {
-            statusElement.textContent = '';
-            statusElement.className = 'file-status';
-        }
-        
-        // Désactiver le bouton de génération
-        this.enableBulletinButton(false);
-        
-        // Faire défiler vers le haut de la page bulletin
-        const bulletinContent = document.getElementById('bulletinContent');
-        if (bulletinContent) {
-            bulletinContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (sidebar && overlay) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            
+            // Réactiver le scroll du body
+            document.body.style.overflow = '';
         }
     }
 }
