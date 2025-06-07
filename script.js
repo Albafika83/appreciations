@@ -20,7 +20,10 @@ class AppreciationGenerator {
                 "manque de concentration",
                 "travail personnel insuffisant",
                 "notions non acquises",
-                "comportement perturbateur"
+                "comportement perturbateur",
+                "manque de rigueur",
+                "des facilités",
+                "des difficultés/lacunes"
             ]
         };
         this.initializeEventListeners();
@@ -1664,6 +1667,12 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                     appreciation += ", lacunes importantes";
                 } else if (negativeInvestment[0].includes("comportement perturbateur")) {
                     appreciation += ", perturbateur";
+                } else if (negativeInvestment[0].includes("manque de rigueur")) {
+                    appreciation += ", manque de rigueur";
+                } else if (negativeInvestment[0].includes("des facilités")) {
+                    appreciation += ", a des facilités";
+                } else if (negativeInvestment[0].includes("des difficultés/lacunes")) {
+                    appreciation += ", difficultés importantes";
                 }
             }
         }
