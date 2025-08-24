@@ -7,6 +7,98 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Sidebar d'aide -->
+    <div id="helpSidebar" class="help-sidebar">
+        <div class="help-sidebar-header">
+            <h2>📖 Mode d'emploi</h2>
+            <button id="closeSidebarBtn" class="close-sidebar-btn">
+                <span class="close-icon">✕</span>
+            </button>
+        </div>
+        <div class="help-sidebar-content">
+            <div id="helpContentMatiere" class="help-content-section active">
+                <h3>📚 Appréciations Matière</h3>
+                <div class="help-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>📁 Importez vos données CSV</h4>
+                        <p>Choisissez entre deux méthodes : <strong>Import fichier</strong> (sélectionnez un fichier CSV) ou <strong>Coller CSV</strong> (collez directement vos données). Formats supportés : Pronote et autres logiciels scolaires.</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>📊 Configurez les types d'évaluation</h4>
+                        <p>Après l'import, un aperçu s'affiche. Définissez le type de chaque colonne : Devoir sur table, Interrogation ou TP. Si vous ne changez rien, la distinction se fait automatiquement par coefficient.</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>👥 Définissez l'investissement des élèves</h4>
+                        <p>Sélectionnez les critères de comportement et d'investissement pour chaque élève (participation, efforts, sérieux, etc.).</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>🤖 Génération automatique</h4>
+                        <p>L'IA analyse les notes, l'évolution et l'investissement pour générer des appréciations personnalisées de 150-200 caractères.</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>📋 Copiez ou exportez</h4>
+                        <p>Utilisez les boutons de copie individuelle ou exportez toutes les appréciations en CSV pour les intégrer dans votre logiciel de notes.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="helpContentBulletin" class="help-content-section">
+                <h3>📋 Bulletin Prof Principal</h3>
+                <div class="help-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>📅 Sélectionnez le trimestre</h4>
+                        <p>Choisissez le trimestre concerné. Pour le 3ème trimestre, l'IA adaptera l'appréciation pour un bilan de fin d'année.</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>📋 Collez le bulletin</h4>
+                        <p>Copiez le bulletin depuis votre logiciel de notes et collez-le dans la zone de texte. Format accepté : 8 lignes par matière (nom, prof, note, moyenne, min, max, heures, appréciation).</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>🤖 Génération de l'appréciation générale</h4>
+                        <p>L'IA analyse toutes les matières, la moyenne générale et les appréciations pour créer une synthèse cohérente et professionnelle.</p>
+                    </div>
+                </div>
+                
+                <div class="help-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>💾 Copiez le résultat</h4>
+                        <p>Utilisez les boutons pour copier l'appréciation générale seule ou le bulletin complet formaté pour l'intégrer dans votre logiciel.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay pour fermer la sidebar -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
     <div class="container">
         <header>
             <h1>🎓 Générateur d'Appréciations Scolaires</h1>
@@ -15,6 +107,12 @@
                 <span class="status-indicator">🤖</span>
                 API Chutes.AI connectée
             </div>
+            
+            <!-- Bouton d'aide -->
+            <button id="helpToggleBtn" class="help-toggle-btn">
+                <span class="help-icon">❓</span>
+                Mode d'emploi
+            </button>
             
             <!-- Navigation entre les pages -->
             <nav class="page-navigation">
@@ -38,32 +136,138 @@
                     <div class="upload-grid">
                         <div class="upload-card">
                             <h3>Trimestre 1</h3>
-                            <label for="trimestre1" class="file-label">
-                                <span class="upload-icon">📄</span>
-                                <span class="upload-text">Choisir le fichier CSV</span>
-                                <input type="file" id="trimestre1" class="file-input" accept=".csv">
-                            </label>
+                            <div class="import-method-selector">
+                                <button class="method-btn active" data-method="file" data-trimester="1">
+                                    <span class="method-icon">📄</span>
+                                    Import fichier
+                                </button>
+                                <button class="method-btn" data-method="paste" data-trimester="1">
+                                    <span class="method-icon">📋</span>
+                                    Coller CSV
+                                </button>
+                            </div>
+                            <div class="import-content">
+                                <div class="file-import-area active" data-import="file-1">
+                                    <label for="trimestre1" class="file-label">
+                                        <span class="upload-icon">📄</span>
+                                        <span class="upload-text">Choisir le fichier CSV</span>
+                                        <input type="file" id="trimestre1" class="file-input" accept=".csv">
+                                    </label>
+                                </div>
+                                <div class="paste-import-area" data-import="paste-1">
+                                    <textarea 
+                                        id="csvPaste1" 
+                                        class="csv-paste-area" 
+                                        placeholder="Collez vos données CSV ici...
+
+Exemple de format :
+&quot;19 élèves&quot;	Classes	Moyenne	07/06	15/05	28/04
+			4	1	4
+&quot;ABDELLAH Ali&quot;	1G5	14,42	17,73	10,00	12,21
+&quot;AGUENANA Noam&quot;	1G2	6,93	9,09	10,00	4,00
+..."
+                                        rows="10"
+                                    ></textarea>
+                                    <button class="validate-paste-btn" data-trimester="1" disabled>
+                                        <span class="btn-icon">✅</span>
+                                        Valider les données
+                                    </button>
+                                </div>
+                            </div>
                             <div id="status1" class="file-status"></div>
                         </div>
                         
                         <div class="upload-card">
                             <h3>Trimestre 2</h3>
-                            <label for="trimestre2" class="file-label">
-                                <span class="upload-icon">📄</span>
-                                <span class="upload-text">Choisir le fichier CSV</span>
-                                <input type="file" id="trimestre2" class="file-input" accept=".csv">
-                            </label>
+                            <div class="import-method-selector">
+                                <button class="method-btn active" data-method="file" data-trimester="2">
+                                    <span class="method-icon">📄</span>
+                                    Import fichier
+                                </button>
+                                <button class="method-btn" data-method="paste" data-trimester="2">
+                                    <span class="method-icon">📋</span>
+                                    Coller CSV
+                                </button>
+                            </div>
+                            <div class="import-content">
+                                <div class="file-import-area active" data-import="file-2">
+                                    <label for="trimestre2" class="file-label">
+                                        <span class="upload-icon">📄</span>
+                                        <span class="upload-text">Choisir le fichier CSV</span>
+                                        <input type="file" id="trimestre2" class="file-input" accept=".csv">
+                                    </label>
+                                </div>
+                                <div class="paste-import-area" data-import="paste-2">
+                                    <textarea 
+                                        id="csvPaste2" 
+                                        class="csv-paste-area" 
+                                        placeholder="Collez vos données CSV ici..."
+                                        rows="10"
+                                    ></textarea>
+                                    <button class="validate-paste-btn" data-trimester="2" disabled>
+                                        <span class="btn-icon">✅</span>
+                                        Valider les données
+                                    </button>
+                                </div>
+                            </div>
                             <div id="status2" class="file-status"></div>
                         </div>
                         
                         <div class="upload-card">
                             <h3>Trimestre 3</h3>
-                            <label for="trimestre3" class="file-label">
-                                <span class="upload-icon">📄</span>
-                                <span class="upload-text">Choisir le fichier CSV</span>
-                                <input type="file" id="trimestre3" class="file-input" accept=".csv">
-                            </label>
+                            <div class="import-method-selector">
+                                <button class="method-btn active" data-method="file" data-trimester="3">
+                                    <span class="method-icon">📄</span>
+                                    Import fichier
+                                </button>
+                                <button class="method-btn" data-method="paste" data-trimester="3">
+                                    <span class="method-icon">📋</span>
+                                    Coller CSV
+                                </button>
+                            </div>
+                            <div class="import-content">
+                                <div class="file-import-area active" data-import="file-3">
+                                    <label for="trimestre3" class="file-label">
+                                        <span class="upload-icon">📄</span>
+                                        <span class="upload-text">Choisir le fichier CSV</span>
+                                        <input type="file" id="trimestre3" class="file-input" accept=".csv">
+                                    </label>
+                                </div>
+                                <div class="paste-import-area" data-import="paste-3">
+                                    <textarea 
+                                        id="csvPaste3" 
+                                        class="csv-paste-area" 
+                                        placeholder="Collez vos données CSV ici..."
+                                        rows="10"
+                                    ></textarea>
+                                    <button class="validate-paste-btn" data-trimester="3" disabled>
+                                        <span class="btn-icon">✅</span>
+                                        Valider les données
+                                    </button>
+                                </div>
+                            </div>
                             <div id="status3" class="file-status"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CSV Preview Section -->
+                <section id="csvPreviewSection" class="csv-preview-section" style="display: none;">
+                    <h2>📊 Aperçu et Configuration des Notes</h2>
+                    <div class="csv-preview-container">
+                        <div class="preview-header">
+                            <p>Configurez le type d'évaluation pour chaque colonne de notes :</p>
+                        </div>
+                        <div id="csvPreviewContent" class="csv-preview-content"></div>
+                        <div class="preview-controls">
+                            <button id="validateTypesBtn" class="validate-btn">
+                                <span class="btn-icon">✅</span>
+                                Valider et Continuer
+                            </button>
+                            <button id="backToUploadBtn" class="back-btn">
+                                <span class="btn-icon">🔙</span>
+                                Retour à l'import
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -93,43 +297,7 @@
                     <div id="resultsContainer" class="results-container"></div>
                 </section>
 
-                <!-- Mode d'emploi Matière -->
-                <section class="help-section">
-                    <h2>📖 Mode d'emploi - Appréciations Matière</h2>
-                    <div class="help-content">
-                        <div class="help-step">
-                            <div class="step-number">1</div>
-                            <div class="step-content">
-                                <h4>📁 Importez vos fichiers CSV</h4>
-                                <p>Sélectionnez les fichiers de notes pour un ou plusieurs trimestres. L'application supporte les formats d'export de Pronote et autres logiciels scolaires.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">2</div>
-                            <div class="step-content">
-                                <h4>👥 Définissez l'investissement des élèves</h4>
-                                <p>Après l'import, sélectionnez les critères de comportement et d'investissement pour chaque élève (participation, efforts, sérieux, etc.).</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">3</div>
-                            <div class="step-content">
-                                <h4>🤖 Génération automatique</h4>
-                                <p>L'IA analyse les notes, l'évolution et l'investissement pour générer des appréciations personnalisées de 150-200 caractères.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">4</div>
-                            <div class="step-content">
-                                <h4>📋 Copiez ou exportez</h4>
-                                <p>Utilisez les boutons de copie individuelle ou exportez toutes les appréciations en CSV pour les intégrer dans votre logiciel de notes.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+
             </div>
 
             <!-- Page Bulletin Prof Principal -->
@@ -211,43 +379,7 @@ Mme SIMONELLI
                     <div id="bulletinContainer" class="bulletin-container"></div>
                 </section>
 
-                <!-- Mode d'emploi Bulletin -->
-                <section class="help-section">
-                    <h2>📖 Mode d'emploi - Bulletin Prof Principal</h2>
-                    <div class="help-content">
-                        <div class="help-step">
-                            <div class="step-number">1</div>
-                            <div class="step-content">
-                                <h4>📅 Sélectionnez le trimestre</h4>
-                                <p>Choisissez le trimestre concerné. Pour le 3ème trimestre, l'IA adaptera l'appréciation pour un bilan de fin d'année.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">2</div>
-                            <div class="step-content">
-                                <h4>📋 Collez le bulletin</h4>
-                                <p>Copiez le bulletin depuis votre logiciel de notes et collez-le dans la zone de texte. Format accepté : 8 lignes par matière (nom, prof, note, moyenne, min, max, heures, appréciation).</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">3</div>
-                            <div class="step-content">
-                                <h4>🤖 Génération de l'appréciation générale</h4>
-                                <p>L'IA analyse toutes les matières, la moyenne générale et les appréciations pour créer une synthèse cohérente et professionnelle.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="help-step">
-                            <div class="step-number">4</div>
-                            <div class="step-content">
-                                <h4>💾 Copiez le résultat</h4>
-                                <p>Utilisez les boutons pour copier l'appréciation générale seule ou le bulletin complet formaté pour l'intégrer dans votre logiciel.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+
             </div>
         </main>
 
