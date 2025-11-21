@@ -2,8 +2,7 @@ class AppreciationGenerator {
     constructor() {
         this.studentsData = new Map();
         this.bulletinData = null;
-        // Token API intégré directement
-        this.apiToken = 'cpk_c18912c80f4d4cba859873de4fd287f1.0458b7941c6450e19dc42ccce2acd5e5.99uFAEoImtmBNbDRfi7GY3lhpkXBwQTN';
+        this.n8nWebhookUrl = '';
         this.investmentCriteria = {
             positive: [
                 "s'investit/participe en classe",
@@ -29,6 +28,8 @@ class AppreciationGenerator {
         this.initializeEventListeners();
         this.initializeNavigation();
         this.hideApiConfig();
+        this.setupWebhook();
+        this.updateApiStatus();
     }
 
     initializeNavigation() {
@@ -255,6 +256,71 @@ class AppreciationGenerator {
         const configSection = document.querySelector('.config-section');
         if (configSection) {
             configSection.style.display = 'none';
+        }
+    }
+
+    setupWebhook() {
+        const params = new URLSearchParams(location.search);
+        const q = params.get('webhook');
+        if (q) {
+            localStorage.setItem('n8nWebhookUrl', q);
+        }
+        const defaultUrl = 'https://rajaoha.tplinkdns.com/webhook/appreciations';
+        let stored = localStorage.getItem('n8nWebhookUrl') || '';
+        if (stored && stored.indexOf('/webhook-test/') > -1) {
+            stored = stored.replace('/webhook-test/', '/webhook/');
+            localStorage.setItem('n8nWebhookUrl', stored);
+        }
+        this.n8nWebhookUrl = stored || defaultUrl;
+    }
+
+    updateApiStatus() {
+        const t = document.getElementById('apiStatusText');
+        const s = document.querySelector('.status-indicator');
+        if (t) {
+            t.textContent = this.n8nWebhookUrl ? 'Webhook n8n connecté' : 'Webhook n8n non configuré';
+        }
+        if (s) {
+            s.textContent = this.n8nWebhookUrl ? '🔗' : '⚠️';
+        }
+    }
+
+    async callN8N(prompt) {
+        if (!this.n8nWebhookUrl) {
+            throw new Error('Webhook n8n manquant');
+        }
+        const tryFetch = async (url) => {
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+            const ct = r.headers.get('content-type') || '';
+            if (ct.indexOf('application/json') > -1) {
+                const py = await r.json();
+                let c = py.text || py.result || py.output || py.message || '';
+                if (!c && py.choices && py.choices[0] && py.choices[0].message && py.choices[0].message.content) {
+                    c = py.choices[0].message.content;
+                }
+                if (!c && typeof py === 'string') {
+                    c = py;
+                }
+                return (c || '').toString().trim();
+            } else {
+                const t = await r.text();
+                return (t || '').toString().trim();
+            }
+        };
+        try {
+            return await tryFetch(this.n8nWebhookUrl);
+        } catch (e) {
+            if (this.n8nWebhookUrl.indexOf('/webhook-test/') > -1) {
+                const fallback = this.n8nWebhookUrl.replace('/webhook-test/', '/webhook/');
+                localStorage.setItem('n8nWebhookUrl', fallback);
+                this.n8nWebhookUrl = fallback;
+                return await tryFetch(fallback);
+            }
+            throw e;
         }
     }
 
@@ -1453,66 +1519,25 @@ class AppreciationGenerator {
 
     async generateAppreciationWithAI(studentData, analysis) {
         const prompt = this.buildPrompt(studentData, analysis);
-        
         try {
-            const response = await fetch('https://llm.chutes.ai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.apiToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: "deepseek-ai/DeepSeek-V3-0324",
-                    messages: [
-                        {
-                            role: "user",
-                            content: prompt
-                        }
-                    ],
-                    stream: false,
-                    max_tokens: 100,
-                    temperature: 0.6
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erreur API: ${response.status}`);
-            }
-
-            const data = await response.json();
-            let appreciation = data.choices[0].message.content.trim();
-            
-            // Nettoyer l'appréciation (supprimer guillemets, préfixes, etc.)
+            let appreciation = await this.callN8N(prompt);
             appreciation = appreciation.replace(/^["']|["']$/g, '');
-            
-            // Supprimer les préfixes indésirables
             appreciation = appreciation.replace(/^(Appréciation\s*:?\s*|Appréciation pour.*?:?\s*)/i, '');
-            
-            // Supprimer les informations de caractères
             appreciation = appreciation.replace(/\s*\(\d+\s*caractères?\)\.?$/i, '');
-            
-            // Nettoyer les espaces multiples
             appreciation = appreciation.replace(/\s+/g, ' ').trim();
-            
-            // Vérifier la longueur mais privilégier les phrases complètes
             if (appreciation.length > 200) {
-                // D'abord essayer de trouver le dernier point avant 200 caractères
                 const lastPeriod = appreciation.substring(0, 200).lastIndexOf('.');
                 if (lastPeriod > 150) {
-                    // Si on trouve un point après 150 caractères, couper là
                     appreciation = appreciation.substring(0, lastPeriod + 1);
                 } else {
-                    // Sinon, tronquer au dernier mot complet
                     const truncated = appreciation.substring(0, 197);
                     const lastSpace = truncated.lastIndexOf(' ');
                     appreciation = truncated.substring(0, lastSpace) + '...';
                 }
             }
-            
             return appreciation;
-            
         } catch (error) {
-            console.error('Erreur API Chutes.AI:', error);
+            console.error('Erreur Webhook n8n:', error);
             return this.generateFallbackAppreciation(studentData, analysis);
         }
     }
@@ -2025,45 +2050,15 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
 
     async generateGeneralAppreciation(bulletinData) {
         const prompt = this.buildGeneralAppreciationPrompt(bulletinData);
-        
         try {
-            const response = await fetch('https://llm.chutes.ai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.apiToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: "deepseek-ai/DeepSeek-V3-0324",
-                    messages: [
-                        {
-                            role: "user",
-                            content: prompt
-                        }
-                    ],
-                    stream: false,
-                    max_tokens: 120,
-                    temperature: 0.7
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erreur API: ${response.status}`);
-            }
-
-            const data = await response.json();
-            let appreciation = data.choices[0].message.content.trim();
-            
-            // Nettoyer l'appréciation
+            let appreciation = await this.callN8N(prompt);
             appreciation = appreciation.replace(/^["']|["']$/g, '');
             appreciation = appreciation.replace(/^(Appréciation\s*:?\s*|Appréciation générale\s*:?\s*)/i, '');
             appreciation = appreciation.replace(/\s*\(\d+\s*caractères?\)\.?$/i, '');
             appreciation = appreciation.replace(/\s+/g, ' ').trim();
-            
             return appreciation;
-            
         } catch (error) {
-            console.error('Erreur API pour l\'appréciation générale:', error);
+            console.error('Erreur Webhook n8n:', error);
             return this.generateFallbackGeneralAppreciation(bulletinData);
         }
     }
@@ -2459,4 +2454,4 @@ window.copyIndividualAppreciation = function(button, appreciation) {
         console.error('Erreur lors de la copie:', err);
         alert('Erreur lors de la copie dans le presse-papiers');
     });
-}; 
+};
