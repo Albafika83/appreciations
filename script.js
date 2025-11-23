@@ -273,10 +273,10 @@ class AppreciationGenerator {
         const t = document.getElementById('apiStatusText');
         const s = document.querySelector('.status-indicator');
         if (t) {
-            t.textContent = this.n8nWebhookUrl ? 'Webhook n8n connecté' : 'Webhook n8n non configuré';
+            t.textContent = 'Powered by n8n';
         }
         if (s) {
-            s.textContent = this.n8nWebhookUrl ? '🔗' : '⚠️';
+            s.textContent = '🎄';
         }
     }
 
