@@ -284,26 +284,45 @@ class AppreciationGenerator {
         if (!this.n8nWebhookUrl) {
             throw new Error('Webhook n8n manquant');
         }
-        const response = await fetch(this.n8nWebhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
-        const ct = response.headers.get('content-type') || '';
-        let content = '';
-        if (ct.indexOf('application/json') > -1) {
-            const py = await response.json();
-            content = py.text || py.result || py.output || py.message || '';
-            if (!content && py.choices && py.choices[0] && py.choices[0].message && py.choices[0].message.content) {
-                content = py.choices[0].message.content;
-            }
-            if (!content && typeof py === 'string') {
-                content = py;
-            }
-        } else {
-            content = await response.text();
+        const headers = { 'Content-Type': 'application/json' };
+        const body = JSON.stringify({ prompt });
+        const candidates = [];
+        const base = this.n8nWebhookUrl;
+        candidates.push(base);
+        if (base.includes('/webhook/')) {
+            candidates.push(base.replace('/webhook/', '/webhook-test/'));
         }
-        return (content || '').toString().trim();
+        if (base.startsWith('https://')) {
+            candidates.push('http://' + base.substring('https://'.length));
+        }
+        let lastError;
+        for (const url of candidates) {
+            try {
+                const response = await fetch(url, { method: 'POST', headers, body });
+                const ct = response.headers.get('content-type') || '';
+                let content = '';
+                if (ct.indexOf('application/json') > -1) {
+                    const py = await response.json();
+                    content = py.text || py.result || py.output || py.message || '';
+                    if (!content && py.choices && py.choices[0] && py.choices[0].message && py.choices[0].message.content) {
+                        content = py.choices[0].message.content;
+                    }
+                    if (!content && typeof py === 'string') {
+                        content = py;
+                    }
+                } else {
+                    content = await response.text();
+                }
+                content = (content || '').toString().trim();
+                if (content) {
+                    return content;
+                }
+            } catch (e) {
+                lastError = e;
+                continue;
+            }
+        }
+        throw lastError || new Error('Webhook indisponible');
     }
 
     switchImportMethod(method, trimester) {
