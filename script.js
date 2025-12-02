@@ -7,10 +7,12 @@ class AppreciationGenerator {
             positive: [
                 "s'investit/participe en classe",
                 "fait des efforts",
-                "très sérieux",
+                "sérieux",
                 "motivé",
+                "des facilités",
                 "travail personnel suffisant",
                 "notions acquises"
+                
             ],
             negative: [
                 "ne s'investit/ne participe pas en classe",
@@ -21,8 +23,9 @@ class AppreciationGenerator {
                 "notions non acquises",
                 "comportement perturbateur",
                 "manque de rigueur",
-                "des facilités",
-                "des difficultés/lacunes"
+                "des difficultés/lacunes",
+                "discret",
+                "passif"
             ]
         };
         this.initializeEventListeners();
@@ -1674,6 +1677,7 @@ ${mentionnerNoteDevoirs ?
 - Utilise un ton professionnel et bienveillant
 - Fais des phrases courtes et va directement à l'essentiel
 Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
+- Tu vouvoies les élèves sur l'appréciation
 
 Écris directement l'appréciation complète sans introduction ni explication.`;
         
@@ -2168,14 +2172,14 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
 - Donne des perspectives pour l'année suivante ou l'orientation
 - Évite les conseils de progression (c'est la fin d'année)
 - Reste concise (environ 180-200 caractères maximum)
-- Utilise un ton professionnel et bienveillant de fin d'année`;
+- Utilise un ton professionnel et bienveillant de fin d'année et vouvoie élèves`;
         } else {
             prompt += `\nRédige une appréciation générale qui :
 - Fait une synthèse globale des résultats et du comportement
 - Mentionne la moyenne générale de manière appropriée
 - Donne des conseils constructifs pour la suite du trimestre
 - Reste concise (environ 180-200 caractères maximum)
-- Utilise un ton professionnel et bienveillant`;
+- Utilise un ton professionnel et bienveillant et vouvoie élèves`;
         }
         
         prompt += `
