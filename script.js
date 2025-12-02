@@ -1088,9 +1088,14 @@ class AppreciationGenerator {
     parsePhysiqueChimieFormat(lines, trimestre) {
         const students = [];
         
-        // Ligne 2 contient les coefficients
-        const coeffLine = lines[1];
-        const coeffParts = this.parseCSVLine(coeffLine);
+        // Ligne 3 contient les coefficients (index 2)
+        // On vérifie si la ligne des coefficients existe
+        if (lines.length < 3) {
+             throw new Error('Format invalide: ligne des coefficients manquante');
+        }
+        
+        const coeffLine = lines[2];
+        const coeffParts = this.detectAndParseCSVLine(coeffLine);
         
         // Extraire les coefficients (ignorer les 2 premières colonnes: nom et moyenne)
         const coefficients = [];
@@ -1104,16 +1109,49 @@ class AppreciationGenerator {
                 if (match) {
                     coefficients.push(parseInt(match[1]));
                 }
+            } else {
+                // Si vide ou non numérique, on met 1 par défaut ou 0 ? 
+                // Dans le doute, on ne pousse rien ou on gère l'index.
+                // Pour garder l'alignement avec les notes, il vaut mieux pousser une valeur, 
+                // mais l'implémentation originale ne poussait que si valide.
+                // On va supposer que les colonnes sont alignées.
+                // Si c'est vide, c'est peut-être un coefficient 1 ou pas de note.
+                // On va pousser null pour maintenir l'index si besoin, 
+                // mais la boucle de notes utilise l'index `j - 2 < coefficients.length`.
+                // Si on ne pousse pas, les coefficients seront décalés par rapport aux colonnes de notes !
+                // C'est un BUG potentiel dans l'original si des colonnes de coeff sont vides.
+                // Mais regardons l'input: "1 1 6 1 1 6 1 1 0 6". Tout est rempli.
+                if (coeff === '' || coeff === '-') {
+                     coefficients.push(1); // Valeur par défaut
+                } else {
+                     coefficients.push(1); // Fallback
+                }
             }
         }
+        
+        // Correction: La boucle ci-dessus était buggée si on ne push pas pour chaque colonne.
+        // Refaisons la boucle pour être sûr de capturer chaque colonne.
+        // On réinitialise coefficients
+        coefficients.length = 0;
+        for (let i = 2; i < coeffParts.length; i++) {
+             const coeffStr = coeffParts[i].trim();
+             let val = 1;
+             if (coeffStr && !isNaN(parseInt(coeffStr))) {
+                 val = parseInt(coeffStr);
+             } else if (coeffStr.includes('/')) {
+                 const match = coeffStr.match(/(\d+)/);
+                 if (match) val = parseInt(match[1]);
+             }
+             coefficients.push(val);
+        }
 
-        // Parser les données des élèves (à partir de la ligne 3)
-        for (let i = 2; i < lines.length; i++) {
+        // Parser les données des élèves (à partir de la ligne 4, index 3)
+        for (let i = 3; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line || line.includes('Moy. de la classe')) continue;
 
             try {
-                const parts = this.parseCSVLine(line);
+                const parts = this.detectAndParseCSVLine(line);
                 if (parts.length < 3) continue;
 
                 const fullName = parts[0].replace(/"/g, '').trim();
@@ -1129,7 +1167,7 @@ class AppreciationGenerator {
                 // Parser les notes (ignorer la moyenne en colonne 2)
                 for (let j = 2; j < parts.length && j - 2 < coefficients.length; j++) {
                     const notePart = parts[j].replace(/"/g, '').trim();
-                    if (!notePart || notePart === 'Abs' || notePart === '' || notePart === 'N.Rdu') continue;
+                    if (!notePart || notePart === 'Abs' || notePart === '' || notePart === 'N.Rdu' || notePart === 'Disp') continue;
 
                     // Convertir virgule en point pour les décimales
                     const noteStr = notePart.replace(',', '.');
@@ -1164,7 +1202,7 @@ class AppreciationGenerator {
             if (!line) continue;
 
             try {
-                const parts = this.parseCSVLine(line);
+                const parts = this.detectAndParseCSVLine(line);
                 if (parts.length < 3) continue;
 
                 const nom = parts[0].trim();
@@ -1176,10 +1214,16 @@ class AppreciationGenerator {
                     const notePart = parts[j].trim();
                     if (!notePart) continue;
 
-                    const match = notePart.match(/^(\d+(?:\.\d+)?)\((\d+)\)$/);
+                    // Format attendu: "Note(Coeff)" ou juste "Note" (coeff 1 par défaut)
+                    // Gérer aussi les formats avec virgule
+                    const notePartNormalized = notePart.replace(',', '.');
+                    
+                    // Regex pour "15.5(2)" ou "15.5"
+                    const match = notePartNormalized.match(/^(\d+(?:\.\d+)?)(?:\((\d+)\))?$/);
                     if (match) {
                         const note = parseFloat(match[1]);
-                        const coeff = parseInt(match[2]);
+                        const coeff = match[2] ? parseInt(match[2]) : 1;
+                        
                         if (!isNaN(note) && !isNaN(coeff) && note >= 0 && note <= 20) {
                             notes.push({ note, coeff });
                         }
@@ -1251,12 +1295,40 @@ class AppreciationGenerator {
         const commaCount = (line.match(/,/g) || []).length;
         const semicolonCount = (line.match(/;/g) || []).length;
         
-        // Si on a des tabulations et que les virgules sont probablement des décimales
-        if (tabCount > 0 && (tabCount >= commaCount || commaCount < tabCount * 2)) {
+        // Si on a des tabulations (priorité au copier-coller Excel/Sheets)
+        if (tabCount > 0 && tabCount >= semicolonCount) {
             return this.parseTabSeparatedLine(line);
-        } else {
+        } 
+        // Si on a plus de points-virgules que de virgules -> CSV format français
+        else if (semicolonCount > 0 && semicolonCount >= commaCount) {
+            return this.parseSemicolonSeparatedLine(line);
+        }
+        // Sinon -> CSV standard (virgule) ou format mixte
+        else {
             return this.parseCSVLine(line);
         }
+    }
+
+    parseSemicolonSeparatedLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ';' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        result.push(current);
+        return result;
     }
 
     async generateAppreciations() {
@@ -1957,7 +2029,7 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
             const line = lines[i].trim();
             if (!line) continue;
 
-            const parts = this.parseCSVLine(line);
+            const parts = this.detectAndParseCSVLine(line);
             
             // Ignorer les en-têtes
             if (parts[0] && (parts[0].toLowerCase().includes('matière') || parts[0].toLowerCase().includes('matiere'))) {
