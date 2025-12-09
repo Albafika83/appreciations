@@ -21,20 +21,11 @@
     },
     {
       "parameters": {
-        "keepOnlySet": true,
-        "values": {
-          "string": [
-            {
-              "name": "prompt",
-              "value": "={{ $json.body.prompt }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "const body = $input.all()[0].json.body;\n\n// Fallback for legacy calls\nif (body.prompt && !body.student) {\n  return { prompt: body.prompt };\n}\n\nconst student = body.student || {};\nconst analysis = body.analysis || { trimestres: {} };\nconst config = body.config || {};\nconst raw_data = body.raw_data || {};\n\nconst trimestres = Object.keys(analysis.trimestres || {}).sort();\nconst dernierTrimestreKey = trimestres[trimestres.length - 1];\nconst dernierTrimestre = dernierTrimestreKey ? analysis.trimestres[dernierTrimestreKey] : {};\nconst numeroTrimestre = dernierTrimestreKey ? parseInt(dernierTrimestreKey.replace('trimestre', '')) : 3;\n\nlet prompt = `Tu es un professeur de ${config.matiere || 'matière'} en classe de ${config.niveau || 'niveau'}. Rédige une appréciation scolaire pour ${student.prenom || 'l\\'élève'} ${student.nom || ''}.\\n\\n`;\n\nprompt += `Données académiques:\\n`;\ntrimestres.forEach(t => {\n    const data = analysis.trimestres[t];\n    const trimNumber = t.replace('trimestre', '');\n    prompt += `- Trimestre ${trimNumber}: Moyenne devoirs ${data.moyenneDevoirs?.toFixed(1) || 'N/A'}/20`;\n    if (data.moyenneInterrogations !== null && data.nbInterrogations > 0) {\n        prompt += `, interrogations ${data.moyenneInterrogations?.toFixed(1)}/20`;\n    }\n    prompt += `\\n`;\n});\n\nprompt += `\\nDétail des notes (Moyenne, Coefficient, Type):\\n`;\ntrimestres.forEach(t => {\n    const notes = raw_data[t];\n    if (notes && notes.length > 0) {\n        prompt += `Trimestre ${t.replace('trimestre', '')}: `;\n        notes.forEach(n => {\n            prompt += `${n.note}/${n.coeff} (${n.evaluationType || '?'}) `;\n        });\n        prompt += `\\n`;\n    }\n});\n\nif (analysis.evolution) {\n    prompt += `- Évolution: ${analysis.evolution}\\n`;\n}\n\nif (student.investment && student.investment.length > 0) {\n    prompt += `\\nComportement et investissement:\\n`;\n    student.investment.forEach(criterion => {\n        prompt += `- ${criterion}\\n`;\n    });\n}\n\nlet conseilsSpecifiques = '';\nif (numeroTrimestre === 3) {\n    conseilsSpecifiques = `\\n- C'est le trimestre 3 (fin d'année), ne demande PAS de progresser ou de continuer les efforts\\n- Fais un bilan de l'année scolaire\\n- Pour les bons résultats : félicite et encourage pour la suite`;\n} else {\n    conseilsSpecifiques = `\\n- C'est le trimestre ${numeroTrimestre}, tu peux encourager la progression et donner des conseils pour la suite\\n- Donne des conseils constructifs`;\n}\n\nconst ecartDevoirs = Math.abs((dernierTrimestre.moyenneDevoirs || 0) - (dernierTrimestre.moyenneGenerale || 0));\nconst mentionnerNoteDevoirs = ecartDevoirs > 3;\n\nprompt += `\\nInstructions de rédaction :\\n`;\nprompt += `- Mentionne les résultats aux devoirs sur table en priorité\\n`;\nif (mentionnerNoteDevoirs) {\n    prompt += `- INDIQUE la note chiffrée aux devoirs sur table car écart significatif avec la moyenne générale\\n`;\n} else {\n    prompt += `- NE MENTIONNE PAS la note chiffrée aux devoirs, parle seulement de \"bons/très bons/excellents résultats\" ou \"difficultés\"\\n`;\n}\nprompt += `- Intègre le comportement/investissement si pertinent${conseilsSpecifiques}\\n`;\nprompt += `- Reste très concise (STRICTEMENT moins de 200 caractères)\\n`;\nprompt += `- IMPÉRATIF : L'appréciation DOIT être complète et se terminer par un point\\n`;\nprompt += `- Ne mentionne jamais les TP\\n`;\nprompt += `- Utilise un ton professionnel et bienveillant, tu vouvoies l\\'élève\\n`;\nprompt += `- Écris directement l\\'appréciation complète sans introduction ni explication.\\n`;\n\nreturn { prompt: prompt };"
       },
       "id": "38aab861-580d-4877-9c76-6890d05bbb2b",
-      "name": "Set Prompt",
-      "type": "n8n-nodes-base.set",
+      "name": "Generate Prompt",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         704,
@@ -59,7 +50,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $('Set Prompt').item.json.prompt }}",
+        "text": "={{ $('Generate Prompt').item.json.prompt }}",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -97,14 +88,14 @@
       "main": [
         [
           {
-            "node": "Set Prompt",
+            "node": "Generate Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set Prompt": {
+    "Generate Prompt": {
       "main": [
         [
           {

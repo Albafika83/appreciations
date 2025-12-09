@@ -130,6 +130,21 @@
         <main>
             <!-- Page Appréciations Matière -->
             <div id="matiereContent" class="page-content active">
+                <!-- Configuration Section -->
+                <section class="config-section" style="display: block;">
+                    <h2>⚙️ Configuration</h2>
+                    <div class="config-grid">
+                        <div class="input-group">
+                            <label for="matiereInput">Matière</label>
+                            <input type="text" id="matiereInput" placeholder="Ex: Mathématiques" value="Physique-Chimie">
+                        </div>
+                        <div class="input-group">
+                            <label for="niveauInput">Niveau</label>
+                            <input type="text" id="niveauInput" placeholder="Ex: Terminale" value="Terminale">
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Upload Section -->
                 <section class="upload-section">
                     <h2>📁 Import des Notes</h2>
@@ -371,6 +386,10 @@ Mme SIMONELLI
                 <section id="bulletinResultsSection" class="results-section" style="display: none;">
                     <h2>📄 Bulletin Généré</h2>
                     <div class="results-controls">
+                        <button id="newBulletinBtn" class="new-btn">
+                            <span class="btn-icon">🔄</span>
+                            Nouveau Bulletin
+                        </button>
                         <button id="copyBulletinBtn" class="copy-btn">
                             <span class="btn-icon">📋</span>
                             Copier le Bulletin Complet

@@ -216,6 +216,14 @@ class AppreciationGenerator {
             });
         }
 
+        // Bouton Nouveau Bulletin
+        const newBulletinBtn = document.getElementById('newBulletinBtn');
+        if (newBulletinBtn) {
+            newBulletinBtn.addEventListener('click', () => {
+                this.resetBulletin();
+            });
+        }
+
         // Boutons pour l'aperçu CSV
         const validateTypesBtn = document.getElementById('validateTypesBtn');
         if (validateTypesBtn) {
@@ -283,14 +291,15 @@ class AppreciationGenerator {
         }
     }
 
-    async callN8N(prompt) {
-        if (!this.n8nWebhookUrl) {
+    async callN8N(data, webhookUrl = null) {
+        const urlToUse = webhookUrl || this.n8nWebhookUrl;
+        if (!urlToUse) {
             throw new Error('Webhook n8n manquant');
         }
         const headers = { 'Content-Type': 'application/json' };
-        const body = JSON.stringify({ prompt });
+        const body = JSON.stringify(typeof data === 'string' ? { prompt: data } : data);
         const candidates = [];
-        const base = this.n8nWebhookUrl;
+        const base = urlToUse;
         candidates.push(base);
         if (base.includes('/webhook/')) {
             candidates.push(base.replace('/webhook/', '/webhook-test/'));
@@ -305,7 +314,13 @@ class AppreciationGenerator {
                 const ct = response.headers.get('content-type') || '';
                 let content = '';
                 if (ct.indexOf('application/json') > -1) {
-                    const py = await response.json();
+                    let py = await response.json();
+                    
+                    // Gestion des réponses n8n en tableau (ex: "Respond to Webhook" avec "All Incoming Items")
+                    if (Array.isArray(py) && py.length > 0) {
+                        py = py[0];
+                    }
+                    
                     content = py.text || py.result || py.output || py.message || '';
                     if (!content && py.choices && py.choices[0] && py.choices[0].message && py.choices[0].message.content) {
                         content = py.choices[0].message.content;
@@ -501,16 +516,33 @@ class AppreciationGenerator {
         }
     }
 
+    // Fonction utilitaire pour le debug
+    logParsingDetails(lines, headerIndex, coeffIndex, dataIndex) {
+        console.group('Détails du parsing CSV');
+        console.log('Lignes totales:', lines.length);
+        console.log('Index Header:', headerIndex, 'Contenu:', lines[headerIndex]);
+        console.log('Index Coeff:', coeffIndex, 'Contenu:', lines[coeffIndex]);
+        console.log('Index Data:', dataIndex, 'Contenu:', lines[dataIndex]);
+        console.groupEnd();
+    }
+
     parsePhysiqueChimieFormatWithPreview(lines, trimestre) {
         const students = [];
         
-        // Pour ce format spécifique :
-        // Ligne 0: "19 élèves" + en-têtes
-        // Ligne 1: coefficients
-        // Ligne 2+: données élèves
-        const headerLineIndex = 0;
-        const coeffLineIndex = 1;
-        const dataStartIndex = 2;
+        // Détection dynamique des lignes d'en-tête
+        // On cherche la ligne contenant "élèves" ou "Nom"
+        let headerLineIndex = 0;
+        for (let i = 0; i < Math.min(lines.length, 5); i++) {
+            if (lines[i].includes('élèves') || (lines[i].includes('Nom') && lines[i].includes('Moyenne'))) {
+                headerLineIndex = i;
+                break;
+            }
+        }
+        
+        const coeffLineIndex = headerLineIndex + 1;
+        const dataStartIndex = headerLineIndex + 2;
+        
+        this.logParsingDetails(lines, headerLineIndex, coeffLineIndex, dataStartIndex);
         
         const headerLine = lines[headerLineIndex];
         const headerParts = this.detectAndParseCSVLine(headerLine);
@@ -529,12 +561,15 @@ class AppreciationGenerator {
             let coeffValue = 1;
             
             // Parser le coefficient
-            if (coeff && !isNaN(parseInt(coeff))) {
-                coeffValue = parseInt(coeff);
-            } else if (coeff.includes('/')) {
-                const match = coeff.match(/(\d+)/);
-                if (match) {
-                    coeffValue = parseInt(match[1]);
+            if (coeff) {
+                const coeffNormalized = coeff.replace(',', '.');
+                if (!isNaN(parseFloat(coeffNormalized))) {
+                    coeffValue = parseFloat(coeffNormalized);
+                } else if (coeff.includes('/')) {
+                    const match = coeffNormalized.match(/(\d+(?:\.\d+)?)/);
+                    if (match) {
+                        coeffValue = parseFloat(match[1]);
+                    }
                 }
             }
             
@@ -638,7 +673,8 @@ class AppreciationGenerator {
                         notes.push({ 
                             note, 
                             coeff: columns[columnIndex].coeff,
-                            evaluationType: columns[columnIndex].evaluationType
+                            evaluationType: columns[columnIndex].evaluationType,
+                            columnIndex: columnIndex
                         });
                     }
                 }
@@ -673,10 +709,12 @@ class AppreciationGenerator {
             const firstLine = this.parseCSVLine(lines[0]);
             for (let i = 2; i < firstLine.length; i++) {
                 const notePart = firstLine[i].trim();
-                const match = notePart.match(/^(\d+(?:\.\d+)?)\((\d+)\)$/);
+                const notePartNormalized = notePart.replace(',', '.');
+                // Regex pour "15.5(2)" ou "15.5 (2)"
+                const match = notePartNormalized.match(/^(\d+(?:\.\d+)?)\s*\((\d+(?:\.\d+)?)\)$/);
                 
                 if (match) {
-                    const coeff = parseInt(match[2]);
+                    const coeff = parseFloat(match[2]);
                     columns.push({
                         index: i,
                         title: `Colonne ${i - 1}`,
@@ -728,17 +766,20 @@ class AppreciationGenerator {
                     const notePart = parts[j].trim();
                     if (!notePart) continue;
 
-                    const match = notePart.match(/^(\d+(?:\.\d+)?)\((\d+)\)$/);
+                    const notePartNormalized = notePart.replace(',', '.');
+                    // Regex pour "15.5(2)" ou "15.5 (2)"
+                    const match = notePartNormalized.match(/^(\d+(?:\.\d+)?)\s*\((\d+(?:\.\d+)?)\)$/);
                     if (match) {
                         const note = parseFloat(match[1]);
-                        const coeff = parseInt(match[2]);
+                        const coeff = parseFloat(match[2]);
                         const columnIndex = j - 2;
                         
                         if (!isNaN(note) && !isNaN(coeff) && note >= 0 && note <= 20 && columnIndex < columns.length) {
                             notes.push({ 
                                 note, 
                                 coeff,
-                                evaluationType: columns[columnIndex].evaluationType
+                                evaluationType: columns[columnIndex].evaluationType,
+                                columnIndex: columnIndex
                             });
                         }
                     }
@@ -768,7 +809,7 @@ class AppreciationGenerator {
         // Déterminer le type d'évaluation basé sur le coefficient
         if (coeff >= 3) {
             return 'devoir';
-        } else if (coeff === 2) {
+        } else if (coeff >= 1.5) { // Seuil abaissé pour inclure 1.5 et 2
             return 'interrogation';
         } else {
             return 'tp';
@@ -811,7 +852,7 @@ class AppreciationGenerator {
         tableHTML += '<tbody><tr class="column-config-header"><td><strong>Type d\'évaluation:</strong></td><td colspan="2">-</td>';
         parseResult.columns.forEach((col, index) => {
             tableHTML += `<td>
-                <select class="evaluation-type-select" data-column-index="${index}">
+                <select class="type-select evaluation-type-select" data-column-index="${index}">
                     <option value="auto" ${col.evaluationType === 'auto' ? 'selected' : ''}>Auto (par coeff)</option>
                     <option value="devoir" ${col.evaluationType === 'devoir' ? 'selected' : ''}>Devoir sur table</option>
                     <option value="interrogation" ${col.evaluationType === 'interrogation' ? 'selected' : ''}>Interrogation</option>
@@ -886,9 +927,12 @@ class AppreciationGenerator {
 
         // Mettre à jour les notes des étudiants avec les nouveaux types
         this.currentParseResult.students.forEach(student => {
-            student.notes.forEach((note, noteIndex) => {
-                if (noteIndex < this.currentParseResult.columns.length) {
-                    note.evaluationType = this.currentParseResult.columns[noteIndex].evaluationType;
+            student.notes.forEach(note => {
+                // Utiliser columnIndex s'il existe (nouveau parsing), sinon fallback sur l'index (ancien comportement, risqué)
+                const colIndex = (note.columnIndex !== undefined) ? note.columnIndex : -1;
+                
+                if (colIndex >= 0 && colIndex < this.currentParseResult.columns.length) {
+                    note.evaluationType = this.currentParseResult.columns[colIndex].evaluationType;
                 }
             });
         });
@@ -1218,14 +1262,14 @@ class AppreciationGenerator {
                     if (!notePart) continue;
 
                     // Format attendu: "Note(Coeff)" ou juste "Note" (coeff 1 par défaut)
-                    // Gérer aussi les formats avec virgule
+                    // Gérer aussi les formats avec virgule et espaces
                     const notePartNormalized = notePart.replace(',', '.');
                     
-                    // Regex pour "15.5(2)" ou "15.5"
-                    const match = notePartNormalized.match(/^(\d+(?:\.\d+)?)(?:\((\d+)\))?$/);
+                    // Regex pour "15.5(2)", "15.5 (2)" ou "15.5"
+                    const match = notePartNormalized.match(/^(\d+(?:\.\d+)?)(?:\s*\((\d+(?:\.\d+)?)\))?$/);
                     if (match) {
                         const note = parseFloat(match[1]);
-                        const coeff = match[2] ? parseInt(match[2]) : 1;
+                        const coeff = match[2] ? parseFloat(match[2]) : 1;
                         
                         if (!isNaN(note) && !isNaN(coeff) && note >= 0 && note <= 20) {
                             notes.push({ note, coeff });
@@ -1510,20 +1554,52 @@ class AppreciationGenerator {
         trimestresDisponibles.forEach(trimestre => {
             const notes = studentData[trimestre];
             
-            // Filtrer par type d'évaluation
+            // Filtrer par type d'évaluation (priorité au type explicite, sinon coeff)
             const devoirsSurTable = notes.filter(n => 
-                n.evaluationType === 'devoir' || (!n.evaluationType && n.coeff > 1)
+                n.evaluationType === 'devoir' || 
+                (!n.evaluationType && (n.coeff >= 3 || n.coeff > 1.5)) // Tentative de catch plus large pour les devoirs
             );
             const interrogations = notes.filter(n => 
-                n.evaluationType === 'interrogation' || (!n.evaluationType && n.coeff === 2)
+                n.evaluationType === 'interrogation' || 
+                (!n.evaluationType && (n.coeff === 2 || (n.coeff > 1 && n.coeff < 3)))
             );
             const tpExercices = notes.filter(n => 
-                n.evaluationType === 'tp' || (!n.evaluationType && n.coeff === 1)
+                n.evaluationType === 'tp' || 
+                (!n.evaluationType && n.coeff <= 1)
             );
 
-            const moyenneDevoirs = this.calculateWeightedAverage(devoirsSurTable);
-            const moyenneInterrogations = this.calculateWeightedAverage(interrogations);
-            const moyenneTP = this.calculateWeightedAverage(tpExercices);
+            // Correction des chevauchements si pas de type explicite
+            // Si un devoir a été compté aussi comme interro (ex: coeff 2), on le garde comme interro si coeff < 3
+            // Mais la logique de getDefaultEvaluationType dit Coeff 2 = Interro.
+            
+            // Refonte simplifiée et robuste
+            const ds = [];
+            const it = [];
+            const tp = [];
+
+            notes.forEach(n => {
+                let type = n.evaluationType;
+                if (!type) {
+                    if (n.coeff >= 3) type = 'devoir';
+                    else if (n.coeff >= 1.5) type = 'interrogation'; // Seuil abaissé pour attraper les coeff 2 comme interro, ou coeff 1.5
+                    else type = 'tp';
+                }
+                
+                // Si l'utilisateur a forcé le type, on respecte.
+                // Sinon, on applique la logique ci-dessus.
+                // Mais attendez, parse...WithPreview a déjà appliqué getDefaultEvaluationType !
+                // Donc n.evaluationType DEVRAIT être défini.
+                // Si n.evaluationType est 'auto', c'est que le sélecteur est resté sur 'auto'.
+                // Mais validateEvaluationTypes convertit 'auto' en type réel.
+                
+                if (type === 'devoir') ds.push(n);
+                else if (type === 'interrogation') it.push(n);
+                else tp.push(n);
+            });
+
+            const moyenneDevoirs = this.calculateWeightedAverage(ds);
+            const moyenneInterrogations = this.calculateWeightedAverage(it);
+            const moyenneTP = this.calculateWeightedAverage(tp);
             const moyenneGenerale = this.calculateWeightedAverage(notes);
 
             analysis.trimestres[trimestre] = {
@@ -1531,9 +1607,9 @@ class AppreciationGenerator {
                 moyenneInterrogations,
                 moyenneTP,
                 moyenneGenerale,
-                nbDevoirs: devoirsSurTable.length,
-                nbInterrogations: interrogations.length,
-                nbTP: tpExercices.length
+                nbDevoirs: ds.length,
+                nbInterrogations: it.length,
+                nbTP: tp.length
             };
         });
 
@@ -1594,9 +1670,34 @@ class AppreciationGenerator {
     }
 
     async generateAppreciationWithAI(studentData, analysis) {
-        const prompt = this.buildPrompt(studentData, analysis);
+        // Récupération de la configuration
+        const matiereInput = document.getElementById('matiereInput');
+        const niveauInput = document.getElementById('niveauInput');
+        const matiere = matiereInput ? matiereInput.value : 'Physique-Chimie';
+        const niveau = niveauInput ? niveauInput.value : 'Terminale';
+        
+        // Construction de l'objet de données complet
+        const payload = {
+            student: {
+                nom: studentData.nom,
+                prenom: studentData.prenom,
+                investment: studentData.investment || []
+            },
+            analysis: analysis,
+            raw_data: {
+                trimestre1: studentData.trimestre1,
+                trimestre2: studentData.trimestre2,
+                trimestre3: studentData.trimestre3
+            },
+            config: {
+                matiere: matiere,
+                niveau: niveau,
+                trimestres_disponibles: Object.keys(analysis.trimestres)
+            }
+        };
+
         try {
-            let appreciation = await this.callN8N(prompt);
+            let appreciation = await this.callN8N(payload);
             appreciation = appreciation.replace(/^["']|["']$/g, '');
             appreciation = appreciation.replace(/^(Appréciation\s*:?\s*|Appréciation pour.*?:?\s*)/i, '');
             appreciation = appreciation.replace(/\s*\(\d+\s*caractères?\)\.?$/i, '');
@@ -1974,9 +2075,160 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
     }
 
     parseBulletinText(bulletinText) {
+        // 1. Nettoyage préliminaire
+        let cleanText = bulletinText
+            .replace(/\r\n|\r|\n/g, ' ') // Tout sur une ligne
+            .replace(/\s+/g, ' ') // Normaliser les espaces
+            .replace(/Tout réduire \/ Tout déployer/g, '')
+            .replace(/Spécialités/g, '')
+            .replace(/LANGUES VIVANTES/g, '')
+            .replace(/ENSEIGNEMENT COMMUN/g, '')
+            .replace(/ENSEIGNEMENT OPTIONNEL/g, '')
+            .trim();
+
         const subjects = [];
-        const lines = bulletinText.split('\n').map(line => line.trim()).filter(line => line);
         
+        // 2. Regex pour identifier le début d'une matière
+        // Une matière est une suite de majuscules (min 3 chars) suivie par un Prof (M./Mme) OU une Note
+        // Ex: "FRANCAIS Mme" ou "ENSEIGNEMENT SCIENTIFIQUE 19,20"
+        const subjectStartRegex = /([A-ZÉÀÈ0-9.& *\-]{3,})(?=\s+(?:M\.|Mme|Mlle|Mr|\d+[.,]\d+))/g;
+        
+        let match;
+        const matches = [];
+        while ((match = subjectStartRegex.exec(cleanText)) !== null) {
+            // Filtrer les faux positifs (ex: "TRÈS BON TRIMESTRE" suivi d'une note ?)
+            // On suppose que les matières sont les seuls blocs majuscules significatifs suivis de ces marqueurs
+            matches.push({
+                name: match[1].trim(),
+                index: match.index
+            });
+        }
+
+        if (matches.length === 0) {
+             // Fallback sur le parsing ligne par ligne si le format inline échoue
+             return this.parseBulletinLegacy(bulletinText.split('\n'));
+        }
+
+        // 3. Traitement des blocs
+        for (let i = 0; i < matches.length; i++) {
+            const currentSubject = matches[i];
+            const nextSubject = matches[i + 1];
+            
+            const start = currentSubject.index + currentSubject.name.length;
+            const end = nextSubject ? nextSubject.index : cleanText.length;
+            const content = cleanText.substring(start, end).trim();
+            
+            const subjectData = this.parseSubjectContent(currentSubject.name, content);
+            subjects.push(subjectData);
+        }
+
+        // 4. Calcul de la moyenne générale
+        const validGrades = subjects
+            .map(s => s.studentGrade)
+            .filter(grade => grade !== null && !isNaN(grade));
+        
+        const generalAverage = validGrades.length > 0 
+            ? (validGrades.reduce((sum, grade) => sum + grade, 0) / validGrades.length).toFixed(2)
+            : 'N/A';
+
+        return {
+            studentName: 'Élève',
+            period: 'Trimestre',
+            subjects,
+            generalAverage,
+            totalSubjects: subjects.length
+        };
+    }
+
+    parseSubjectContent(name, content) {
+        const result = {
+            name: name,
+            teacher: 'N/A',
+            studentGrade: null,
+            classAverage: null,
+            minGrade: null,
+            maxGrade: null,
+            hours: '',
+            appreciation: ''
+        };
+
+        // Extraction du professeur
+        const teacherMatch = content.match(/^(M\.|Mme|Mlle|Mr)\s+[A-ZÉÀÈ-]+/);
+        let remainingContent = content;
+        
+        if (teacherMatch) {
+            result.teacher = teacherMatch[0];
+            remainingContent = content.substring(teacherMatch[0].length).trim();
+        }
+
+        // Extraction des notes (suite de nombres décimaux)
+        // On cherche toutes les notes au début du contenu restant
+        const gradeRegex = /(\d+[.,]\d+)/g;
+        let grades = [];
+        let gradeMatch;
+        
+        // On regarde si le contenu commence par des notes
+        // Attention: les notes peuvent être séparées par des espaces
+        // On va extraire toutes les notes trouvées AVANT le texte de l'appréciation ou les heures
+        
+        // Stratégie: Splitter par espace et consommer tant que c'est une note
+        const parts = remainingContent.split(' ');
+        let contentStartIndex = 0;
+        
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (/^\d+[.,]\d+$/.test(part)) {
+                grades.push(parseFloat(part.replace(',', '.')));
+            } else if (/^\d+h\d+$/.test(part)) {
+                result.hours = part;
+            } else {
+                // Dès qu'on tombe sur autre chose qu'une note ou une heure, c'est le début de l'appréciation
+                // Sauf si c'est un caractère spécial isolé ?
+                if (part === '*' || part === ':' || part === '-') continue;
+                
+                contentStartIndex = i;
+                break;
+            }
+        }
+        
+        // Reconstruction de l'appréciation
+        // On prend tout ce qui reste à partir du premier mot non-technique
+        // Mais attention, on a itéré sur parts.
+        // Une méthode plus sûre: retirer les notes et heures trouvées du début de la string
+        
+        // Assignation des notes (Ordre supposé: Élève, Classe, Min, Max)
+        if (grades.length > 0) result.studentGrade = grades[0];
+        if (grades.length > 1) result.classAverage = grades[1];
+        if (grades.length > 2) result.minGrade = grades[2];
+        if (grades.length > 3) result.maxGrade = grades[3];
+
+        // Pour l'appréciation, on va utiliser une regex pour nettoyer le début (Prof, Notes, Heures)
+        let appreciation = content;
+        
+        // Retirer le prof s'il a été trouvé
+        if (result.teacher !== 'N/A') {
+            appreciation = appreciation.replace(result.teacher, '').trim();
+        }
+        
+        // Retirer les notes et heures au début
+        // On répète le remplacement tant qu'il y a des notes/heures au début
+        let changed = true;
+        while (changed) {
+            changed = false;
+            const startMatch = appreciation.match(/^(\d+[.,]\d+|\d+h\d+|[*:\-])\s*/);
+            if (startMatch) {
+                appreciation = appreciation.substring(startMatch[0].length);
+                changed = true;
+            }
+        }
+        
+        result.appreciation = appreciation.trim();
+        
+        return result;
+    }
+
+    parseBulletinLegacy(lines) {
+        const subjects = [];
         // Parser le format ligne par ligne (8 lignes par matière)
         for (let i = 0; i < lines.length; i += 8) {
             if (i + 7 < lines.length) {
@@ -1995,11 +2247,6 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
                     subjects.push(subject);
                 }
             }
-        }
-
-        // Si le format 8 lignes ne fonctionne pas, essayer le format CSV
-        if (subjects.length === 0) {
-            return this.parseBulletinCSV(bulletinText);
         }
 
         if (subjects.length === 0) {
@@ -2126,14 +2373,46 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
     }
 
     async generateGeneralAppreciation(bulletinData) {
-        const prompt = this.buildGeneralAppreciationPrompt(bulletinData);
+        const trimesterSelectElement = document.getElementById('trimesterSelect');
+        const selectedTrimester = trimesterSelectElement ? parseInt(trimesterSelectElement.value) : 1;
+        
+        // Construction du payload pour n8n
+        const payload = {
+            body: {
+                subjects: bulletinData.subjects.map(s => ({
+                    name: s.name,
+                    teacher: s.teacher,
+                    grades: {
+                        student: s.studentGrade,
+                        class: s.classAverage,
+                        min: s.minGrade,
+                        max: s.maxGrade
+                    },
+                    hours: s.hours,
+                    appreciation: s.appreciation
+                })),
+                generalAvg: {
+                    student: bulletinData.generalAverage
+                },
+                trimester: selectedTrimester,
+                type: 'prof_principal'
+            }
+        };
+
+        // Déterminer l'URL du webhook (suppose un endpoint 'appreciations-pp' pour le prof principal)
+        let webhookUrl = this.n8nWebhookUrl;
+        if (webhookUrl.endsWith('appreciations')) {
+            webhookUrl = webhookUrl.replace('appreciations', 'appreciations-pp');
+        }
+        
         try {
-            let appreciation = await this.callN8N(prompt);
+            let appreciation = await this.callN8N(payload, webhookUrl);
+            // On ne nettoie plus la réponse pour respecter l'output brut du flow si possible, 
+            // ou juste un nettoyage minimal des guillemets
             appreciation = appreciation.replace(/^["']|["']$/g, '');
+            // On enlève les préfixes évidents si l'IA en remet malgré le prompt
             appreciation = appreciation.replace(/^(Appréciation\s*:?\s*|Appréciation générale\s*:?\s*)/i, '');
-            appreciation = appreciation.replace(/\s*\(\d+\s*caractères?\)\.?$/i, '');
-            appreciation = appreciation.replace(/\s+/g, ' ').trim();
-            return appreciation;
+            return appreciation.trim();
         } catch (error) {
             console.error('Erreur Webhook n8n:', error);
             return this.generateFallbackGeneralAppreciation(bulletinData);
@@ -2239,11 +2518,6 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
     displayBulletin(bulletinData, generalAppreciation) {
         const container = document.getElementById('bulletinContainer');
         const resultsSection = document.getElementById('bulletinResultsSection');
-        const trimesterSelectElement = document.getElementById('trimesterSelect');
-        const selectedTrimester = trimesterSelectElement ? parseInt(trimesterSelectElement.value) : 1;
-        const trimesterText = selectedTrimester === 1 ? '1er Trimestre' : 
-                             selectedTrimester === 2 ? '2ème Trimestre' : 
-                             '3ème Trimestre (Fin d\'année)';
         
         // Stocker les données pour la copie
         this.currentBulletin = bulletinData;
@@ -2254,57 +2528,17 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
             return;
         }
         
+        // Affichage simplifié : uniquement l'appréciation générée par le flux n8n
         container.innerHTML = `
-            <div class="bulletin-header">
-                <div class="bulletin-student-name">${bulletinData.studentName}</div>
-                <div class="bulletin-period">${trimesterText}</div>
-            </div>
-            
-            <div class="bulletin-stats">
-                <div class="stat-item">
-                    <div class="stat-label">Moyenne Générale</div>
-                    <div class="stat-value">${bulletinData.generalAverage}/20</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Nombre de Matières</div>
-                    <div class="stat-value">${bulletinData.totalSubjects}</div>
-                </div>
-            </div>
-            
-            <div class="bulletin-subjects">
-                <div class="subject-line">
-                    <div>MATIÈRE</div>
-                    <div>PROFESSEUR</div>
-                    <div>NOTE</div>
-                    <div>MOY.</div>
-                    <div>MIN</div>
-                    <div>MAX</div>
-                    <div>H/SEM</div>
-                    <div>APPRÉCIATION</div>
-                </div>
-                ${bulletinData.subjects.map(subject => `
-                    <div class="subject-line">
-                        <div class="subject-name" data-label="Matière">${subject.name}</div>
-                        <div class="subject-teacher" data-label="Professeur">${subject.teacher}</div>
-                        <div class="subject-grade" data-label="Note">${subject.studentGrade !== null ? subject.studentGrade.toFixed(2) : 'Disp'}</div>
-                        <div class="subject-grade" data-label="Moyenne">${subject.classAverage !== null ? subject.classAverage.toFixed(2) : '-'}</div>
-                        <div class="subject-grade" data-label="Min">${subject.minGrade !== null ? subject.minGrade.toFixed(2) : '-'}</div>
-                        <div class="subject-grade" data-label="Max">${subject.maxGrade !== null ? subject.maxGrade.toFixed(2) : '-'}</div>
-                        <div data-label="Heures">${subject.hours}</div>
-                        <div class="subject-appreciation" data-label="Appréciation">${subject.appreciation}</div>
-                    </div>
-                `).join('')}
-            </div>
-            
-            <div class="bulletin-general-appreciation">
+            <div class="bulletin-general-appreciation" style="margin-top: 0; padding-top: 0; border: none;">
                 <div class="general-appreciation-header">
-                    ${selectedTrimester === 3 ? 'Appréciation Générale de Fin d\'Année' : 'Appréciation Générale'}
+                    Appréciation Générale
                     <button id="copyAppreciationBtn" class="copy-appreciation-btn">
                         <span class="btn-icon">📋</span>
                         Copier
                     </button>
                 </div>
-                <div class="general-appreciation-text">${generalAppreciation}</div>
+                <div class="general-appreciation-text" style="white-space: pre-wrap;">${generalAppreciation}</div>
             </div>
         `;
         
@@ -2375,6 +2609,12 @@ Ne fais jamais apparaitre **, ou Appréciation pour ou appréciation
             console.error('Erreur lors de la copie:', err);
             alert('Erreur lors de la copie dans le presse-papiers');
         });
+    }
+
+    resetBulletin() {
+        this.clearBulletin();
+        this.currentBulletin = null;
+        this.currentGeneralAppreciation = null;
     }
 
     clearBulletin() {
