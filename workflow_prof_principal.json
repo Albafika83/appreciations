@@ -1,59 +1,78 @@
 {
-  "name": "Générateur Appréciation Prof Principal",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "appreciations-pp",
-        "options": {}
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        250,
-        300
-      ]
+        -480,
+        544
+      ],
+      "id": "c3f5131b-cb8d-40c0-bae9-c268348e834d",
+      "webhookId": "16cbebbf-9eb6-4f4f-b110-b4f2e9bd4f3e"
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.all()[0].json.body;\nconst subjects = body.subjects || [];\nconst generalAvg = body.generalAvg || {};\nconst trimester = body.trimester || '1';\n\nlet prompt = `Tu es le Professeur Principal d'un élève. Rédige une appréciation générale pour son bulletin du trimestre ${trimester}.\\n\\n`;\n\nprompt += `Moyenne générale de l'élève : ${generalAvg.student || 'N/A'}.\\n\\n`;\n\nprompt += \"Voici le détail par matière :\\n\";\n\nsubjects.forEach(sub => {\n    let subjectInfo = `- ${sub.name}`;\n    if (sub.teacher && sub.teacher !== 'N/A') subjectInfo += ` (${sub.teacher})`;\n    if (sub.hours) subjectInfo += ` [${sub.hours}]`;\n    subjectInfo += `: Note ${sub.grades.student || 'N/A'}`;\n    if (sub.grades.class) subjectInfo += ` (Moy. classe: ${sub.grades.class})`;\n    subjectInfo += `.\\n  Appréciation: \"${sub.appreciation}\"\\n`;\n    prompt += subjectInfo;\n});\n\nprompt += `\\nConsignes :\\n- Synthétise les points forts et les axes d'amélioration.\\n- Adopte un ton professionnel, encourageant et constructif.\\n- Ne répète pas le détail de chaque matière, mais dégage une tendance générale.\\n- Fais ressortir l'attitude et l'investissement global.\\n- Si c'est le 3ème trimestre, fais un bilan de l'année.\\n- Longueur : environ 3-4 phrases.\\n`;\n\nreturn { prompt };"
-      },
-      "name": "Generate Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "modelId": {
-          "__rl": true,
-          "value": "gpt-4o",
-          "mode": "list",
-          "cachedResultName": "GPT-4o"
-        },
-        "messages": {
-          "values": [
-            {
-              "content": "={{ $json.prompt }}"
-            }
-          ]
+        "promptType": "define",
+        "text": "={{ $json.body.body }}",
+        "options": {
+          "systemMessage": "Tu es professeur principal de la classe, à partir de la liste des appréciations et des notes de l'élève, génère une appréciaiton générale de moins de 200 caractères. Adopte un ton professionnel.  Adresse toi directement à l'élève en la vouvoyant\nPas de Madame, monsieur\n"
         }
       },
-      "name": "OpenAI",
-      "type": "n8n-nodes-base.openAi",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -16,
+        544
+      ],
+      "id": "6febe4f8-492d-4efe-a8a4-6f48e39e6710",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "24abb6a8-d456-48ee-a413-1437c122d6d5",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        650,
-        300
+        336,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "albert-large",
+          "mode": "list",
+          "cachedResultName": "albert-large"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -16,
+        736
       ],
+      "id": "9007ec7b-a6d6-4448-9489-d998acb5788c",
+      "name": "OpenAI Chat Model1",
       "credentials": {
         "openAiApi": {
-          "id": "1",
-          "name": "OpenAI account"
+          "id": "FpDbf6X2aFv4svau",
+          "name": "OpenAi Albert_chat_model"
         }
       }
     }
@@ -63,23 +82,39 @@
       "main": [
         [
           {
-            "node": "Generate Prompt",
+            "node": "AI Agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Prompt": {
+    "AI Agent": {
       "main": [
         [
           {
-            "node": "OpenAI",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
         ]
       ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "24a2b08f77aeb416fc8a1b6ce580fed9fca8abd82cfa8923be93e3103166544d"
   }
 }

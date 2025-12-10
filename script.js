@@ -1702,16 +1702,6 @@ class AppreciationGenerator {
             appreciation = appreciation.replace(/^(Appréciation\s*:?\s*|Appréciation pour.*?:?\s*)/i, '');
             appreciation = appreciation.replace(/\s*\(\d+\s*caractères?\)\.?$/i, '');
             appreciation = appreciation.replace(/\s+/g, ' ').trim();
-            if (appreciation.length > 200) {
-                const lastPeriod = appreciation.substring(0, 200).lastIndexOf('.');
-                if (lastPeriod > 150) {
-                    appreciation = appreciation.substring(0, lastPeriod + 1);
-                } else {
-                    const truncated = appreciation.substring(0, 197);
-                    const lastSpace = truncated.lastIndexOf(' ');
-                    appreciation = truncated.substring(0, lastSpace) + '...';
-                }
-            }
             return appreciation;
         } catch (error) {
             console.error('Erreur Webhook n8n:', error);
